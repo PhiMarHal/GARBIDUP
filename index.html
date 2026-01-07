@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dumpyard Fling</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #gameWrapper {
+            position: relative;
+        }
+
+        #threeCanvas,
+        #uiCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #threeCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #uiCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="gameWrapper">
+            <canvas id="threeCanvas"></canvas>
+            <canvas id="uiCanvas"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            // Canvas dimensions will be set dynamically
+            WIDTH: 400,
+            HEIGHT: 600,
+
+            // World dimensions (Three.js units) - elongated corridor
+            CORRIDOR_WIDTH: 40,      // Narrower width
+            WORLD_LENGTH: 200,       // Longer
+            LAKE_Z: 100,             // Lake center position
+            LAKE_WIDTH: 60,          // 4x bigger lake (was 15)
+
+            // Gameplay
+            LETTER_COUNT: 12,
+            PILE_COUNT: 14,
+            GRAVITY: 0.004,        // Lower gravity for longer, more dramatic arcs
+            AIR_RESISTANCE: 0.998, // Less air resistance
+
+            // Scoring
+            POINTS_PER_LETTER: 100,
+            SHOT_PENALTY: 50,
+            PERFECT_BONUS: 200,
+
+            // UI
+            LETTER_SIZE: 30,
+            LETTER_GAP: 2,
+            LETTER_Y: 15,
+            WORD_Y: 55,
+            ANIM_SPEED: 0.15,
+        };
+
+        // ============================================
+        // OBJECT DICTIONARY
+        // ============================================
+        const DICTIONARY = {
+            'CAN': { weight: 1.0 }, 'BAG': { weight: 0.8 }, 'JAR': { weight: 1.2 },
+            'BOX': { weight: 1.0 }, 'MUG': { weight: 1.3 }, 'PAN': { weight: 1.5 },
+            'CUP': { weight: 0.9 }, 'LID': { weight: 0.6 }, 'TOY': { weight: 0.7 },
+            'RAG': { weight: 0.4 }, 'TIRE': { weight: 3.0 }, 'LAMP': { weight: 2.0 },
+            'BOOK': { weight: 1.5 }, 'DRUM': { weight: 2.5 }, 'PIPE': { weight: 2.2 },
+            'ROPE': { weight: 1.2 }, 'VASE': { weight: 1.8 }, 'TRAY': { weight: 1.4 },
+            'BOWL': { weight: 1.6 }, 'CAGE': { weight: 2.0 }, 'CHAIR': { weight: 4.0 },
+            'CRATE': { weight: 3.5 }, 'STOOL': { weight: 3.8 }, 'BRICK': { weight: 4.5 },
+            'PLANT': { weight: 2.5 }, 'BOARD': { weight: 3.0 }, 'FRAME': { weight: 2.8 },
+            'CLOCK': { weight: 2.2 }, 'RADIO': { weight: 2.5 }, 'TRUNK': { weight: 5.0 },
+            'BUCKET': { weight: 3.0 }, 'BARREL': { weight: 6.0 }, 'BOTTLE': { weight: 2.0 },
+            'MIRROR': { weight: 4.0 }, 'CARPET': { weight: 5.0 }, 'FRIDGE': { weight: 8.0 },
+            'DRAWER': { weight: 4.5 }, 'LADDER': { weight: 5.5 }, 'HEATER': { weight: 6.0 },
+            'BASKET': { weight: 2.5 }, 'BATHTUB': { weight: 10.0 }, 'BICYCLE': { weight: 7.0 },
+            'MONITOR': { weight: 5.0 }, 'FREEZER': { weight: 9.0 }, 'TOASTER': { weight: 3.0 },
+            'BLENDER': { weight: 3.5 }, 'PRINTER': { weight: 6.0 }, 'CURTAIN': { weight: 2.0 },
+        };
+
+        const WORD_LIST = Object.keys(DICTIONARY);
+
+        // ============================================
+        // GAME STATE
+        // ============================================
+        let gameState = 'WORD_BUILDING';
+        let showDictionary = false;
+
+        // Letters
+        let letters = [];
+        let selectedOrder = [];
+
+        // 3D objects
+        let trashPiles = [];
+        let currentObject = null;
+        let objectMesh = null;
+        let activePileIndex = -1;
+
+        // Camera state
+        let cameraMode = 'DUMPYARD'; // 'DUMPYARD' or 'GRASS'
+        let targetCameraPos = new THREE.Vector3(0, 5, -10);
+        let targetCameraLook = new THREE.Vector3(0, 0, 30);
+
+        // Scoring
+        let score = 0;
+        let shotsTaken = 0;
+        let pilesCleared = 0;
+
+        // Messages
+        let message = '';
+        let messageTimer = 0;
+
+        // Fling
+        let flingStart = null;
+        let flingCurrent = null;
+        let isFlingReady = false;
+
+        // Three.js
+        let scene, camera, renderer;
+        let uiCanvas, uiCtx;
+
+        // Trail
+        let trailPoints = [];
+        let trailLine = null;
+
+        // ============================================
+        // THREE.JS SETUP
+        // ============================================
+        function initThree() {
+            const threeCanvas = document.getElementById('threeCanvas');
+
+            // Renderer - will be resized by handleResize
+            renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, antialias: true });
+            renderer.setSize(CONFIG.WIDTH, CONFIG.HEIGHT);
+            renderer.setClearColor(0x87CEEB);
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x87CEEB, 80, 200);
+
+            // Camera - wider FOV to see more of the corridor
+            camera = new THREE.PerspectiveCamera(70, CONFIG.WIDTH / CONFIG.HEIGHT, 0.1, 300);
+            camera.position.set(0, 5, -10);
+            camera.lookAt(0, 0, 50);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, -10);
+            scene.add(directionalLight);
+
+            // Build environment
+            buildEnvironment();
+
+            // Handle resize
+            handleResize();
+            window.addEventListener('resize', handleResize);
+        }
+
+        function handleResize() {
+            const container = document.getElementById('container');
+            const wrapper = document.getElementById('gameWrapper');
+
+            const containerW = container.clientWidth;
+            const containerH = container.clientHeight;
+            const targetRatio = 2 / 3;
+
+            let width, height;
+
+            if (containerW / containerH > targetRatio) {
+                // Container is wider than 2:3, fit to height
+                height = containerH;
+                width = height * targetRatio;
+            } else {
+                // Container is taller than 2:3, fit to width
+                width = containerW;
+                height = width / targetRatio;
+            }
+
+            wrapper.style.width = width + 'px';
+            wrapper.style.height = height + 'px';
+
+            // Update internal resolution
+            CONFIG.WIDTH = Math.floor(width);
+            CONFIG.HEIGHT = Math.floor(height);
+
+            // Update Three.js renderer
+            if (renderer) {
+                renderer.setSize(CONFIG.WIDTH, CONFIG.HEIGHT);
+                camera.aspect = CONFIG.WIDTH / CONFIG.HEIGHT;
+                camera.updateProjectionMatrix();
+            }
+
+            // Update UI canvas
+            if (uiCanvas) {
+                uiCanvas.width = CONFIG.WIDTH;
+                uiCanvas.height = CONFIG.HEIGHT;
+            }
+
+            // Recalculate letter positions
+            if (letters.length > 0) {
+                const letterSize = Math.min(30, Math.floor((CONFIG.WIDTH - 40) / CONFIG.LETTER_COUNT) - CONFIG.LETTER_GAP);
+                CONFIG.LETTER_SIZE = letterSize;
+
+                const totalWidth = CONFIG.LETTER_COUNT * CONFIG.LETTER_SIZE + (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP;
+                const startX = (CONFIG.WIDTH - totalWidth) / 2;
+
+                letters.forEach((letter, i) => {
+                    letter.poolX = startX + i * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP);
+                    if (!letter.selected) {
+                        letter.currentX = letter.poolX;
+                    }
+                });
+
+                updateWordPositions();
+            }
+        }
+
+        function buildEnvironment() {
+            const corridorWidth = CONFIG.CORRIDOR_WIDTH;
+            const lakeZ = CONFIG.LAKE_Z;
+            const lakeWidth = CONFIG.LAKE_WIDTH;
+            const lakeStart = lakeZ - lakeWidth / 2;
+            const lakeEnd = lakeZ + lakeWidth / 2;
+
+            // Ground - Dumpyard (brown, from z=-10 to lake start)
+            const dumpLength = lakeStart + 10;
+            const dumpGeom = new THREE.BoxGeometry(corridorWidth, 1, dumpLength);
+            const dumpMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
+            const dumpGround = new THREE.Mesh(dumpGeom, dumpMat);
+            dumpGround.position.set(0, -0.5, (lakeStart - 10) / 2);
+            scene.add(dumpGround);
+
+            // Add some dirt texture variation with smaller boxes
+            for (let i = 0; i < 40; i++) {
+                const size = 2 + Math.random() * 4;
+                const dirtGeom = new THREE.BoxGeometry(size, 0.3, size);
+                const shade = 0x3a2718 + Math.floor(Math.random() * 0x101010);
+                const dirtMat = new THREE.MeshLambertMaterial({ color: shade });
+                const dirt = new THREE.Mesh(dirtGeom, dirtMat);
+                dirt.position.set(
+                    (Math.random() - 0.5) * (corridorWidth - 5),
+                    0.01,
+                    Math.random() * (lakeStart - 5)
+                );
+                scene.add(dirt);
+            }
+
+            // Lake (blue)
+            const lakeGeom = new THREE.BoxGeometry(corridorWidth, 0.5, lakeWidth);
+            const lakeMat = new THREE.MeshLambertMaterial({ color: 0x2e86ab });
+            const lake = new THREE.Mesh(lakeGeom, lakeMat);
+            lake.position.set(0, -0.3, lakeZ);
+            scene.add(lake);
+
+            // Lake surface shimmer
+            const shimmerGeom = new THREE.PlaneGeometry(corridorWidth - 10, lakeWidth - 10);
+            const shimmerMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.15
+            });
+            const shimmer = new THREE.Mesh(shimmerGeom, shimmerMat);
+            shimmer.rotation.x = -Math.PI / 2;
+            shimmer.position.set(0, 0.01, lakeZ);
+            scene.add(shimmer);
+
+            // Grass (green, from lake end onwards)
+            const grassLength = 80;
+            const grassGeom = new THREE.BoxGeometry(corridorWidth, 1, grassLength);
+            const grassMat = new THREE.MeshLambertMaterial({ color: 0x3d7a2d });
+            const grass = new THREE.Mesh(grassGeom, grassMat);
+            grass.position.set(0, -0.5, lakeEnd + grassLength / 2);
+            scene.add(grass);
+
+            // Some grass tufts
+            for (let i = 0; i < 30; i++) {
+                const tuftGeom = new THREE.BoxGeometry(0.5, 1 + Math.random(), 0.5);
+                const tuftMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+                const tuft = new THREE.Mesh(tuftGeom, tuftMat);
+                tuft.position.set(
+                    (Math.random() - 0.5) * (corridorWidth - 5),
+                    0.5,
+                    lakeEnd + 5 + Math.random() * (grassLength - 10)
+                );
+                scene.add(tuft);
+            }
+
+            // Distant trees (simple boxes) - at the far end
+            for (let i = 0; i < 8; i++) {
+                // Trunk
+                const trunkGeom = new THREE.BoxGeometry(1, 4, 1);
+                const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3020 });
+                const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+                trunk.position.set(
+                    (Math.random() - 0.5) * (corridorWidth - 5),
+                    2,
+                    lakeEnd + grassLength - 20 + Math.random() * 15
+                );
+                scene.add(trunk);
+
+                // Foliage
+                const foliageGeom = new THREE.BoxGeometry(3, 5, 3);
+                const foliageMat = new THREE.MeshLambertMaterial({ color: 0x1a5a1a });
+                const foliage = new THREE.Mesh(foliageGeom, foliageMat);
+                foliage.position.set(trunk.position.x, 6, trunk.position.z);
+                scene.add(foliage);
+            }
+
+            // Side walls/barriers (to make it feel like a corridor)
+            const wallHeight = 3;
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+
+            // Left wall
+            const leftWallGeom = new THREE.BoxGeometry(2, wallHeight, CONFIG.WORLD_LENGTH);
+            const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
+            leftWall.position.set(-corridorWidth / 2 - 1, wallHeight / 2, CONFIG.WORLD_LENGTH / 2 - 20);
+            scene.add(leftWall);
+
+            // Right wall
+            const rightWall = new THREE.Mesh(leftWallGeom, wallMat);
+            rightWall.position.set(corridorWidth / 2 + 1, wallHeight / 2, CONFIG.WORLD_LENGTH / 2 - 20);
+            scene.add(rightWall);
+
+            // Trail line (hidden for now - will be replaced with sprite effects later)
+            // const trailMat = new THREE.LineBasicMaterial({ color: 0xffcc00, linewidth: 2 });
+            // const trailGeom = new THREE.BufferGeometry();
+            // trailLine = new THREE.Line(trailGeom, trailMat);
+            // scene.add(trailLine);
+            trailLine = null;
+        }
+
+        function createTrashPiles() {
+            // Remove old piles
+            trashPiles.forEach(pile => {
+                if (pile.mesh) scene.remove(pile.mesh);
+            });
+            trashPiles = [];
+
+            const lakeStart = CONFIG.LAKE_Z - CONFIG.LAKE_WIDTH / 2;
+            const maxX = (CONFIG.CORRIDOR_WIDTH / 2) - 5;
+
+            for (let i = 0; i < CONFIG.PILE_COUNT; i++) {
+                // Spread piles along the dumpyard (from z=5 to just before lake)
+                const z = 5 + (i / CONFIG.PILE_COUNT) * (lakeStart - 15);
+                const x = (Math.random() - 0.5) * maxX * 2;
+
+                // Create pile mesh (irregular stack of boxes)
+                const pileGroup = new THREE.Group();
+
+                const baseSize = 1.5 + Math.random();
+                for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
+                    const boxSize = baseSize * (1 - j * 0.2);
+                    const boxGeom = new THREE.BoxGeometry(
+                        boxSize + Math.random() * 0.5,
+                        boxSize * 0.6,
+                        boxSize + Math.random() * 0.5
+                    );
+                    const shade = 0x3a2a1a + Math.floor(Math.random() * 0x151515);
+                    const boxMat = new THREE.MeshLambertMaterial({ color: shade });
+                    const box = new THREE.Mesh(boxGeom, boxMat);
+                    box.position.set(
+                        (Math.random() - 0.5) * 0.5,
+                        j * boxSize * 0.5 + boxSize * 0.3,
+                        (Math.random() - 0.5) * 0.5
+                    );
+                    box.rotation.y = Math.random() * 0.5;
+                    pileGroup.add(box);
+                }
+
+                pileGroup.position.set(x, 0, z);
+                scene.add(pileGroup);
+
+                trashPiles.push({
+                    x: x,
+                    z: z,
+                    mesh: pileGroup,
+                    active: true
+                });
+            }
+        }
+
+        function createObjectMesh(word, weight) {
+            // Remove old object
+            if (objectMesh) {
+                scene.remove(objectMesh);
+            }
+
+            // Create irregular triangular prism
+            const size = 0.8 + weight * 0.1;
+            const shape = new THREE.Shape();
+            shape.moveTo(-size, -size * 0.5);
+            shape.lineTo(size * 0.6, -size * 0.3);
+            shape.lineTo(size * 0.3, size);
+            shape.closePath();
+
+            const extrudeSettings = { depth: size * 0.5, bevelEnabled: false };
+            const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+            // Color based on weight
+            const hue = (50 - weight * 4) / 360;
+            const color = new THREE.Color().setHSL(hue, 0.7, 0.5);
+            const mat = new THREE.MeshLambertMaterial({ color: color });
+
+            objectMesh = new THREE.Mesh(geom, mat);
+            objectMesh.castShadow = true;
+
+            // Add outline
+            const edges = new THREE.EdgesGeometry(geom);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x222222 });
+            const outline = new THREE.LineSegments(edges, lineMat);
+            objectMesh.add(outline);
+
+            scene.add(objectMesh);
+
+            return objectMesh;
+        }
+
+        function updateTrail() {
+            // Trail disabled for now
+        }
+
+        // ============================================
+        // UI CANVAS SETUP
+        // ============================================
+        function initUI() {
+            uiCanvas = document.getElementById('uiCanvas');
+            uiCtx = uiCanvas.getContext('2d');
+            uiCanvas.width = CONFIG.WIDTH;
+            uiCanvas.height = CONFIG.HEIGHT;
+        }
+
+        // ============================================
+        // LETTER GENERATION
+        // ============================================
+        function generateLetterPool() {
+            const guaranteedWord = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
+            let chars = guaranteedWord.split('');
+
+            const letterCount = {};
+            chars.forEach(c => letterCount[c] = (letterCount[c] || 0) + 1);
+
+            const vowels = 'EEEEAAAIIIOOU';
+            const consonants = 'TTNNSSRRHHLLDDCCMMFFGGPPBBWWKKVVJXQZ';
+
+            let addedConsonants = 0;
+            let addedVowels = 0;
+
+            while (chars.length < CONFIG.LETTER_COUNT) {
+                let pool;
+                if (addedConsonants < 2 && chars.length >= CONFIG.LETTER_COUNT - 2) {
+                    pool = consonants;
+                } else if (addedVowels < 2 && chars.length >= CONFIG.LETTER_COUNT - 2) {
+                    pool = vowels;
+                } else {
+                    pool = Math.random() < 0.4 ? vowels : consonants;
+                }
+
+                const letter = pool[Math.floor(Math.random() * pool.length)];
+
+                if ((letterCount[letter] || 0) < 3) {
+                    chars.push(letter);
+                    letterCount[letter] = (letterCount[letter] || 0) + 1;
+                    if (vowels.includes(letter)) addedVowels++;
+                    else addedConsonants++;
+                }
+            }
+
+            // Shuffle
+            for (let i = chars.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [chars[i], chars[j]] = [chars[j], chars[i]];
+            }
+
+            const totalWidth = CONFIG.LETTER_COUNT * CONFIG.LETTER_SIZE + (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP;
+            const startX = (CONFIG.WIDTH - totalWidth) / 2;
+
+            letters = chars.map((char, i) => ({
+                char: char,
+                poolX: startX + i * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP),
+                poolY: CONFIG.LETTER_Y,
+                wordX: 0,
+                wordY: CONFIG.WORD_Y,
+                currentX: startX + i * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP),
+                currentY: CONFIG.LETTER_Y,
+                selected: false,
+                animating: false
+            }));
+
+            selectedOrder = [];
+        }
+
+        function getSelectedWord() {
+            return selectedOrder.map(i => letters[i].char).join('');
+        }
+
+        function isValidWord(word) {
+            return DICTIONARY.hasOwnProperty(word);
+        }
+
+        function updateWordPositions() {
+            const count = selectedOrder.length;
+            if (count === 0) return;
+
+            const totalWidth = count * CONFIG.LETTER_SIZE + (count - 1) * CONFIG.LETTER_GAP;
+            const startX = (CONFIG.WIDTH - totalWidth) / 2;
+
+            selectedOrder.forEach((letterIndex, orderIndex) => {
+                letters[letterIndex].wordX = startX + orderIndex * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP);
+            });
+        }
+
+        function selectLetter(index) {
+            if (letters[index].selected) return;
+            letters[index].selected = true;
+            letters[index].animating = true;
+            selectedOrder.push(index);
+            updateWordPositions();
+        }
+
+        function deselectLetter(index) {
+            const orderPos = selectedOrder.indexOf(index);
+            if (orderPos === -1) return;
+
+            // Only deselect the clicked letter
+            letters[index].selected = false;
+            letters[index].animating = true;
+
+            // Remove from selectedOrder
+            selectedOrder.splice(orderPos, 1);
+
+            updateWordPositions();
+        }
+
+        // ============================================
+        // UI RENDERING
+        // ============================================
+        function renderUI() {
+            uiCtx.clearRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            // Top panel
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            uiCtx.fillRect(0, 0, CONFIG.WIDTH, 95);
+
+            renderLetterPool();
+            renderWordArea();
+            renderBottomUI();
+
+            // Message
+            if (messageTimer > 0) {
+                uiCtx.fillStyle = 'rgba(0,0,0,0.7)';
+                uiCtx.fillRect(50, CONFIG.HEIGHT / 2 - 30, CONFIG.WIDTH - 100, 60);
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.font = 'bold 22px Arial';
+                uiCtx.textAlign = 'center';
+                uiCtx.fillText(message, CONFIG.WIDTH / 2, CONFIG.HEIGHT / 2 + 8);
+            }
+
+            // Fling instructions
+            if (gameState === 'FLING' && currentObject) {
+                uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
+                uiCtx.fillRect(50, CONFIG.HEIGHT - 160, CONFIG.WIDTH - 100, 50);
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.font = '16px Arial';
+                uiCtx.textAlign = 'center';
+                uiCtx.fillText('Drag down to throw forward!', CONFIG.WIDTH / 2, CONFIG.HEIGHT - 138);
+                uiCtx.font = '12px Arial';
+                uiCtx.fillStyle = '#AAA';
+                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight.toFixed(1)}`, CONFIG.WIDTH / 2, CONFIG.HEIGHT - 120);
+            }
+
+            // Fling indicator
+            if (gameState === 'FLING' && flingStart && flingCurrent) {
+                renderFlingIndicator();
+            }
+
+            if (showDictionary) {
+                renderDictionaryPopup();
+            }
+
+            if (gameState === 'VICTORY') {
+                renderVictoryScreen();
+            }
+        }
+
+        function renderLetterPool() {
+            for (let i = 0; i < letters.length; i++) {
+                const letter = letters[i];
+                if (letter.selected) continue;
+
+                const x = letter.currentX;
+                const y = letter.currentY;
+
+                uiCtx.fillStyle = '#4a90d9';
+                uiCtx.fillRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.strokeStyle = '#2a5a89';
+                uiCtx.lineWidth = 2;
+                uiCtx.strokeRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.font = 'bold 18px Arial';
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText(letter.char, x + CONFIG.LETTER_SIZE / 2, y + CONFIG.LETTER_SIZE / 2);
+            }
+        }
+
+        function renderWordArea() {
+            const word = getSelectedWord();
+            const isValid = isValidWord(word);
+
+            for (let orderIndex = 0; orderIndex < selectedOrder.length; orderIndex++) {
+                const letterIndex = selectedOrder[orderIndex];
+                const letter = letters[letterIndex];
+
+                const x = letter.currentX;
+                const y = letter.currentY;
+
+                uiCtx.fillStyle = isValid ? '#3d8a3d' : '#5a5a6a';
+                uiCtx.fillRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.strokeStyle = isValid ? '#2d6a2d' : '#3a3a4a';
+                uiCtx.lineWidth = 2;
+                uiCtx.strokeRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.font = 'bold 18px Arial';
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText(letter.char, x + CONFIG.LETTER_SIZE / 2, y + CONFIG.LETTER_SIZE / 2);
+            }
+
+            if (isValid) {
+                const btnWidth = 80;
+                const btnHeight = 24;
+                const btnX = (CONFIG.WIDTH - btnWidth) / 2;
+                const btnY = CONFIG.WORD_Y + CONFIG.LETTER_SIZE + 5;
+
+                uiCtx.fillStyle = '#4CAF50';
+                uiCtx.fillRect(btnX, btnY, btnWidth, btnHeight);
+                uiCtx.strokeStyle = '#2d7a2d';
+                uiCtx.lineWidth = 2;
+                uiCtx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.font = 'bold 12px Arial';
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText('THROW IT!', CONFIG.WIDTH / 2, btnY + btnHeight / 2);
+            }
+        }
+
+        function renderBottomUI() {
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            uiCtx.fillRect(0, CONFIG.HEIGHT - 35, CONFIG.WIDTH, 35);
+
+            const pilesLeft = trashPiles.filter(p => p.active).length;
+            uiCtx.fillStyle = '#AAA';
+            uiCtx.font = '14px Arial';
+            uiCtx.textAlign = 'left';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText(`Piles: ${pilesLeft}/${CONFIG.PILE_COUNT}`, 15, CONFIG.HEIGHT - 17);
+
+            uiCtx.fillStyle = '#FFD700';
+            uiCtx.font = 'bold 18px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.fillText(score.toString(), CONFIG.WIDTH / 2, CONFIG.HEIGHT - 17);
+
+            uiCtx.fillStyle = '#666';
+            uiCtx.fillRect(CONFIG.WIDTH - 55, CONFIG.HEIGHT - 30, 45, 25);
+            uiCtx.strokeStyle = '#888';
+            uiCtx.lineWidth = 1;
+            uiCtx.strokeRect(CONFIG.WIDTH - 55, CONFIG.HEIGHT - 30, 45, 25);
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = '11px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('DICT', CONFIG.WIDTH - 32, CONFIG.HEIGHT - 17);
+        }
+
+        function renderFlingIndicator() {
+            const pullX = flingCurrent.x - flingStart.x;
+            const pullY = flingCurrent.y - flingStart.y;
+            const power = Math.min(Math.sqrt(pullX * pullX + pullY * pullY), 150);
+
+            if (power < 10) return;
+
+            // Pull line (where finger dragged)
+            uiCtx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
+            uiCtx.lineWidth = 2;
+            uiCtx.setLineDash([5, 5]);
+            uiCtx.beginPath();
+            uiCtx.moveTo(flingStart.x, flingStart.y);
+            uiCtx.lineTo(flingCurrent.x, flingCurrent.y);
+            uiCtx.stroke();
+            uiCtx.setLineDash([]);
+
+            // Throw direction indicator (pull down = throw forward shown as up arrow)
+            const throwLength = power * 0.6;
+            // Visual: show arrow going "into" the screen (upward on 2D = forward in 3D)
+            const visualAngle = -Math.PI / 2; // Always point up for "forward"
+            const throwEndX = flingStart.x;
+            const throwEndY = flingStart.y - throwLength * (pullY > 0 ? 1 : -1);
+
+            uiCtx.strokeStyle = `rgba(255, 80, 80, ${0.5 + power / 300})`;
+            uiCtx.lineWidth = 4 + power / 30;
+            uiCtx.lineCap = 'round';
+
+            uiCtx.beginPath();
+            uiCtx.moveTo(flingStart.x, flingStart.y);
+            uiCtx.lineTo(throwEndX, throwEndY);
+            uiCtx.stroke();
+
+            // Arrowhead
+            const arrowAngle = throwEndY < flingStart.y ? -Math.PI / 2 : Math.PI / 2;
+            uiCtx.beginPath();
+            uiCtx.moveTo(throwEndX, throwEndY);
+            uiCtx.lineTo(throwEndX - 12 * Math.cos(arrowAngle - 0.5), throwEndY - 12 * Math.sin(arrowAngle - 0.5));
+            uiCtx.moveTo(throwEndX, throwEndY);
+            uiCtx.lineTo(throwEndX - 12 * Math.cos(arrowAngle + 0.5), throwEndY - 12 * Math.sin(arrowAngle + 0.5));
+            uiCtx.stroke();
+
+            // Power indicator
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = 'bold 14px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'bottom';
+            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x, Math.min(flingStart.y, throwEndY) - 15);
+        }
+
+        function renderDictionaryPopup() {
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            uiCtx.fillStyle = '#FFD700';
+            uiCtx.font = 'bold 24px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'top';
+            uiCtx.fillText('OBJECT DICTIONARY', CONFIG.WIDTH / 2, 30);
+
+            uiCtx.fillStyle = '#AAA';
+            uiCtx.font = '12px Arial';
+            uiCtx.fillText('(tap anywhere to close)', CONFIG.WIDTH / 2, 58);
+
+            const words = WORD_LIST.slice().sort((a, b) => a.localeCompare(b));
+            const cols = 3;
+            const rowHeight = 26;
+            const colWidth = CONFIG.WIDTH / cols;
+            const startY = 90;
+
+            uiCtx.textAlign = 'left';
+            uiCtx.textBaseline = 'middle';
+
+            for (let i = 0; i < words.length; i++) {
+                const word = words[i];
+                const col = i % cols;
+                const row = Math.floor(i / cols);
+                const x = 15 + col * colWidth;
+                const y = startY + row * rowHeight;
+
+                if (y > CONFIG.HEIGHT - 50) continue;
+
+                const hue = 60 + word.length * 25;
+                uiCtx.font = '13px Arial';
+                uiCtx.fillStyle = `hsl(${hue}, 60%, 65%)`;
+                uiCtx.fillText(word, x, y);
+
+                uiCtx.fillStyle = '#666';
+                uiCtx.font = '10px Arial';
+                uiCtx.fillText(`(${DICTIONARY[word].weight})`, x + 52, y);
+            }
+        }
+
+        function renderVictoryScreen() {
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            uiCtx.fillStyle = '#FFD700';
+            uiCtx.font = 'bold 32px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('DUMPYARD', CONFIG.WIDTH / 2, 180);
+            uiCtx.fillText('CLEARED!', CONFIG.WIDTH / 2, 220);
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = '28px Arial';
+            uiCtx.fillText(score.toString(), CONFIG.WIDTH / 2, 300);
+            uiCtx.font = '14px Arial';
+            uiCtx.fillStyle = '#AAA';
+            uiCtx.fillText('FINAL SCORE', CONFIG.WIDTH / 2, 330);
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = '18px Arial';
+            uiCtx.fillText(`Objects Flung: ${pilesCleared}`, CONFIG.WIDTH / 2, 380);
+
+            uiCtx.fillStyle = '#4CAF50';
+            uiCtx.fillText('Tap to play again', CONFIG.WIDTH / 2, 450);
+        }
+
+        // ============================================
+        // INPUT HANDLING
+        // ============================================
+        function initInput() {
+            uiCanvas.addEventListener('mousedown', handlePointerStart);
+            uiCanvas.addEventListener('mousemove', handlePointerMove);
+            uiCanvas.addEventListener('mouseup', handlePointerEnd);
+
+            uiCanvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handlePointerStart(e.touches[0]);
+            });
+            uiCanvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                handlePointerMove(e.touches[0]);
+            });
+            uiCanvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handlePointerEnd(e.changedTouches[0]);
+            });
+        }
+
+        function getCanvasCoords(event) {
+            const rect = uiCanvas.getBoundingClientRect();
+            const scaleX = CONFIG.WIDTH / rect.width;
+            const scaleY = CONFIG.HEIGHT / rect.height;
+            return {
+                x: (event.clientX - rect.left) * scaleX,
+                y: (event.clientY - rect.top) * scaleY
+            };
+        }
+
+        function handlePointerStart(event) {
+            const pos = getCanvasCoords(event);
+
+            if (showDictionary) {
+                showDictionary = false;
+                return;
+            }
+
+            if (gameState === 'VICTORY') {
+                resetGame();
+                return;
+            }
+
+            // Dictionary button
+            if (pos.x >= CONFIG.WIDTH - 55 && pos.x <= CONFIG.WIDTH - 10 &&
+                pos.y >= CONFIG.HEIGHT - 30 && pos.y <= CONFIG.HEIGHT - 5) {
+                showDictionary = true;
+                return;
+            }
+
+            if (gameState === 'WORD_BUILDING') {
+                // Pool letters
+                for (let i = 0; i < letters.length; i++) {
+                    if (letters[i].selected) continue;
+                    const letter = letters[i];
+                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + CONFIG.LETTER_SIZE &&
+                        pos.y >= letter.currentY && pos.y <= letter.currentY + CONFIG.LETTER_SIZE) {
+                        selectLetter(i);
+                        return;
+                    }
+                }
+
+                // Word area letters
+                for (let orderIndex = selectedOrder.length - 1; orderIndex >= 0; orderIndex--) {
+                    const letterIndex = selectedOrder[orderIndex];
+                    const letter = letters[letterIndex];
+                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + CONFIG.LETTER_SIZE &&
+                        pos.y >= letter.currentY && pos.y <= letter.currentY + CONFIG.LETTER_SIZE) {
+                        deselectLetter(letterIndex);
+                        return;
+                    }
+                }
+
+                // Submit button
+                const word = getSelectedWord();
+                if (isValidWord(word)) {
+                    const btnWidth = 80;
+                    const btnHeight = 24;
+                    const btnX = (CONFIG.WIDTH - btnWidth) / 2;
+                    const btnY = CONFIG.WORD_Y + CONFIG.LETTER_SIZE + 5;
+
+                    if (pos.x >= btnX && pos.x <= btnX + btnWidth &&
+                        pos.y >= btnY && pos.y <= btnY + btnHeight) {
+                        submitWord();
+                        return;
+                    }
+                }
+            }
+
+            if (gameState === 'FLING') {
+                flingStart = pos;
+                flingCurrent = pos;
+                isFlingReady = true;
+            }
+        }
+
+        function handlePointerMove(event) {
+            if (gameState === 'FLING' && isFlingReady) {
+                flingCurrent = getCanvasCoords(event);
+            }
+        }
+
+        function handlePointerEnd(event) {
+            if (gameState === 'FLING' && isFlingReady && flingStart) {
+                performFling(getCanvasCoords(event));
+                flingStart = null;
+                flingCurrent = null;
+                isFlingReady = false;
+            }
+        }
+
+        function submitWord() {
+            const word = getSelectedWord();
+            if (!isValidWord(word)) return;
+
+            const activePiles = trashPiles.map((p, i) => ({ pile: p, index: i })).filter(p => p.pile.active);
+            if (activePiles.length === 0) {
+                gameState = 'VICTORY';
+                return;
+            }
+
+            const chosen = activePiles[Math.floor(Math.random() * activePiles.length)];
+            activePileIndex = chosen.index;
+
+            currentObject = {
+                word: word,
+                weight: DICTIONARY[word].weight,
+                x: chosen.pile.x,
+                y: 2,
+                z: chosen.pile.z,
+                vx: 0,
+                vy: 0,
+                vz: 0,
+                rotation: 0,
+                rotationSpeed: 0
+            };
+
+            createObjectMesh(word, currentObject.weight);
+            objectMesh.position.set(currentObject.x, currentObject.y, currentObject.z);
+
+            // Highlight pile
+            if (chosen.pile.mesh) {
+                chosen.pile.mesh.children.forEach(child => {
+                    if (child.material) {
+                        child.userData.originalColor = child.material.color.getHex();
+                        child.material.emissive = new THREE.Color(0x444400);
+                    }
+                });
+            }
+
+            shotsTaken = 0;
+            trailPoints = [];
+            updateTrail(); // Clear the trail line
+
+            // Snap camera behind object
+            cameraMode = 'DUMPYARD';
+            setCameraBehindObject();
+
+            showMessage(`Found: ${word}!`);
+            gameState = 'OBJECT_SPAWN';
+
+            setTimeout(() => {
+                if (gameState === 'OBJECT_SPAWN') {
+                    gameState = 'FLING';
+                }
+            }, 1000);
+        }
+
+        function performFling(endPos) {
+            if (!currentObject) return;
+
+            const pullX = endPos.x - flingStart.x;
+            const pullY = endPos.y - flingStart.y;
+
+            const power = Math.sqrt(pullX * pullX + pullY * pullY);
+            if (power < 20) return;
+
+            const weightFactor = 1 / (0.5 + currentObject.weight * 0.05);
+            const normalizedPower = Math.min(power, 150) / 150;
+
+            const directionMultiplier = (cameraMode === 'DUMPYARD') ? 1 : -1;
+
+            // Forward velocity - tuned to work with position clamping
+            currentObject.vz = normalizedPower * 0.4 * weightFactor * directionMultiplier;
+
+            // Lateral velocity - very small
+            currentObject.vx = -pullX * 0.0008 * weightFactor;
+
+            // Vertical velocity - high for dramatic arc (3-4 second flight)
+            currentObject.vy = 0.2 + normalizedPower * 0.25 * weightFactor;
+
+            // Spin
+            currentObject.rotationSpeed = (Math.random() - 0.5) * 0.08 + pullX * 0.0003;
+
+            trailPoints = [];
+            shotsTaken++;
+            gameState = 'FLYING';
+        }
+
+        // ============================================
+        // GAME LOGIC
+        // ============================================
+        function update() {
+            // Letter animations
+            for (let i = 0; i < letters.length; i++) {
+                const letter = letters[i];
+                let targetX = letter.selected ? letter.wordX : letter.poolX;
+                let targetY = letter.selected ? letter.wordY : letter.poolY;
+
+                letter.currentX += (targetX - letter.currentX) * CONFIG.ANIM_SPEED;
+                letter.currentY += (targetY - letter.currentY) * CONFIG.ANIM_SPEED;
+            }
+
+            // Message timer
+            if (messageTimer > 0) {
+                messageTimer -= 16;
+            }
+
+            // Camera interpolation - faster during flight, smooth lookAt
+            const cameraLerpSpeed = (gameState === 'FLYING') ? 0.12 : 0.06;
+            camera.position.lerp(targetCameraPos, cameraLerpSpeed);
+
+            // Smooth lookAt by interpolating a look target point
+            if (!camera.userData.currentLookAt) {
+                camera.userData.currentLookAt = targetCameraLook.clone();
+            }
+            camera.userData.currentLookAt.lerp(targetCameraLook, cameraLerpSpeed);
+            camera.lookAt(camera.userData.currentLookAt);
+
+            // Object physics
+            if (gameState === 'FLYING' && currentObject) {
+                // Gravity
+                currentObject.vy -= CONFIG.GRAVITY;
+
+                // Air resistance
+                currentObject.vx *= CONFIG.AIR_RESISTANCE;
+                currentObject.vz *= CONFIG.AIR_RESISTANCE;
+
+                // Update position
+                currentObject.x += currentObject.vx;
+                currentObject.y += currentObject.vy;
+                currentObject.z += currentObject.vz;
+                currentObject.rotation += currentObject.rotationSpeed;
+
+                // Clamp position to stay within playable bounds
+                const lakeStart = CONFIG.LAKE_Z - CONFIG.LAKE_WIDTH / 2;
+                const lakeEnd = CONFIG.LAKE_Z + CONFIG.LAKE_WIDTH / 2;
+                const minZ = -5;
+                const maxZ = lakeEnd + 30; // Allow some overshoot into grass but not infinite
+                const maxX = CONFIG.CORRIDOR_WIDTH / 2 - 2;
+
+                // If object would go past bounds, clamp it and kill that velocity component
+                if (currentObject.z < minZ) {
+                    currentObject.z = minZ;
+                    currentObject.vz = 0;
+                } else if (currentObject.z > maxZ) {
+                    currentObject.z = maxZ;
+                    currentObject.vz = 0;
+                }
+
+                if (Math.abs(currentObject.x) > maxX) {
+                    currentObject.x = Math.sign(currentObject.x) * maxX;
+                    currentObject.vx = 0;
+                }
+
+                // Update mesh
+                if (objectMesh) {
+                    objectMesh.position.set(currentObject.x, currentObject.y, currentObject.z);
+                    objectMesh.rotation.z = currentObject.rotation;
+                    objectMesh.rotation.x = currentObject.rotation * 0.5;
+                }
+
+                // Camera follows object - directly behind
+                if (cameraMode === 'DUMPYARD') {
+                    targetCameraPos.set(
+                        currentObject.x,
+                        Math.max(4, currentObject.y + 3),
+                        currentObject.z - 18
+                    );
+                    targetCameraLook.set(currentObject.x, Math.max(0, currentObject.y - 1), currentObject.z + 15);
+                } else {
+                    // Viewing from grass side
+                    targetCameraPos.set(
+                        currentObject.x,
+                        Math.max(4, currentObject.y + 3),
+                        currentObject.z + 18
+                    );
+                    targetCameraLook.set(currentObject.x, Math.max(0, currentObject.y - 1), currentObject.z - 15);
+                }
+
+                // Check landing
+                if (currentObject.y <= 0 && currentObject.vy < 0) {
+                    currentObject.y = 0.5;
+                    currentObject.vy = 0;
+                    currentObject.vx = 0;
+                    currentObject.vz = 0;
+                    currentObject.rotationSpeed = 0;
+
+                    if (objectMesh) {
+                        objectMesh.position.y = 0.5;
+                    }
+
+                    const lakeStart = CONFIG.LAKE_Z - CONFIG.LAKE_WIDTH / 2;
+                    const lakeEnd = CONFIG.LAKE_Z + CONFIG.LAKE_WIDTH / 2;
+
+                    if (currentObject.z >= lakeStart && currentObject.z <= lakeEnd) {
+                        handleSuccess();
+                        return; // Exit update - currentObject is now null
+                    } else if (currentObject.z < lakeStart) {
+                        // Landed short - stay here, shoot toward lake
+                        showMessage('Too short!');
+                        cameraMode = 'DUMPYARD';
+                        trailPoints = [];
+                        updateTrail();
+                        setCameraBehindObject();
+                        gameState = 'FLING';
+                    } else if (currentObject.z > lakeEnd) {
+                        // Overshot - stay here, shoot back toward lake
+                        showMessage('Too far!');
+                        cameraMode = 'GRASS';
+                        trailPoints = [];
+                        updateTrail();
+                        setCameraBehindObject();
+                        gameState = 'FLING';
+                    }
+                }
+            }
+        }
+
+        function handleSuccess() {
+            const wordPoints = currentObject.word.length * CONFIG.POINTS_PER_LETTER;
+            const shotPenalty = (shotsTaken - 1) * CONFIG.SHOT_PENALTY;
+            const bonus = shotsTaken === 1 ? CONFIG.PERFECT_BONUS : 0;
+            const earnedPoints = Math.max(0, wordPoints - shotPenalty + bonus);
+
+            score += earnedPoints;
+            pilesCleared++;
+
+            // Remove pile
+            if (activePileIndex >= 0 && trashPiles[activePileIndex]) {
+                const pile = trashPiles[activePileIndex];
+                pile.active = false;
+                if (pile.mesh) {
+                    scene.remove(pile.mesh);
+                }
+            }
+
+            // Remove object
+            if (objectMesh) {
+                scene.remove(objectMesh);
+                objectMesh = null;
+            }
+
+            let msg = `+${earnedPoints}!`;
+            if (bonus > 0) msg += ' PERFECT!';
+            showMessage(msg);
+
+            trailPoints = [];
+            updateTrail();
+
+            const pilesLeft = trashPiles.filter(p => p.active).length;
+            if (pilesLeft === 0) {
+                gameState = 'TRANSITIONING';
+                currentObject = null;
+                activePileIndex = -1;
+                setTimeout(() => {
+                    gameState = 'VICTORY';
+                }, 1500);
+                return;
+            }
+
+            // Set state immediately to avoid race condition
+            gameState = 'TRANSITIONING';
+            currentObject = null;
+            activePileIndex = -1;
+
+            setTimeout(() => {
+                generateLetterPool();
+                cameraMode = 'DUMPYARD';
+                targetCameraPos.set(0, 5, -10);
+                targetCameraLook.set(0, 0, 50);
+                gameState = 'WORD_BUILDING';
+            }, 1500);
+        }
+
+        function showMessage(msg) {
+            message = msg;
+            messageTimer = 1500;
+        }
+
+        function setCameraBehindObject() {
+            // Sets the target camera position directly behind the object (smooth transition)
+            if (!currentObject) return;
+
+            if (cameraMode === 'DUMPYARD') {
+                // Directly behind object, looking toward lake
+                targetCameraPos.set(currentObject.x, 5, currentObject.z - 18);
+                targetCameraLook.set(currentObject.x, 1, currentObject.z + 30);
+            } else {
+                // Directly behind object on grass side, looking toward dumpyard
+                targetCameraPos.set(currentObject.x, 5, currentObject.z + 18);
+                targetCameraLook.set(currentObject.x, 1, currentObject.z - 30);
+            }
+        }
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        function gameLoop() {
+            update();
+            renderer.render(scene, camera);
+            renderUI();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            score = 0;
+            pilesCleared = 0;
+            shotsTaken = 0;
+            currentObject = null;
+            activePileIndex = -1;
+            showDictionary = false;
+            cameraMode = 'DUMPYARD';
+
+            if (objectMesh) {
+                scene.remove(objectMesh);
+                objectMesh = null;
+            }
+
+            trailPoints = [];
+            updateTrail();
+
+            targetCameraPos.set(0, 5, -10);
+            targetCameraLook.set(0, 0, 50);
+            camera.position.copy(targetCameraPos);
+            camera.userData.currentLookAt = targetCameraLook.clone();
+            camera.lookAt(targetCameraLook);
+
+            createTrashPiles();
+            generateLetterPool();
+            gameState = 'WORD_BUILDING';
+        }
+
+        function init() {
+            initThree();
+            initUI();
+            initInput();
+            handleResize(); // Initial sizing
+            resetGame();
+            gameLoop();
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
