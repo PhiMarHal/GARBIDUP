@@ -75,6 +75,21 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // Polyfill for roundRect if not available
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+                return this;
+            };
+        }
+
         // ============================================
         // CONFIGURATION
         // ============================================
@@ -87,11 +102,11 @@
             CORRIDOR_WIDTH: 40,      // Narrower width
             WORLD_LENGTH: 200,       // Longer
             LAKE_Z: 100,             // Lake center position
-            LAKE_WIDTH: 60,          // 4x bigger lake (was 15)
+            LAKE_WIDTH: 40,          // Lake width for balanced challenge
 
             // Gameplay
             LETTER_COUNT: 12,
-            PILE_COUNT: 14,
+            PILE_COUNT: 16,
             GRAVITY: 0.004,        // Lower gravity for longer, more dramatic arcs
             AIR_RESISTANCE: 0.998, // Less air resistance
 
@@ -101,10 +116,11 @@
             PERFECT_BONUS: 200,
 
             // UI
-            LETTER_SIZE: 30,
-            LETTER_GAP: 2,
-            LETTER_Y: 15,
-            WORD_Y: 55,
+            LETTER_SIZE: 30,       // Base size, will be calculated dynamically
+            WORD_LETTER_SIZE: 38,  // Bigger letters for built word
+            LETTER_GAP: 3,
+            LETTER_Y: 70,          // Lower, leaving more room for score/dict at top
+            WORD_Y: 120,           // Will be calculated dynamically
             ANIM_SPEED: 0.15,
         };
 
@@ -112,22 +128,50 @@
         // OBJECT DICTIONARY
         // ============================================
         const DICTIONARY = {
-            'CAN': { weight: 1.0 }, 'BAG': { weight: 0.8 }, 'JAR': { weight: 1.2 },
-            'BOX': { weight: 1.0 }, 'MUG': { weight: 1.3 }, 'PAN': { weight: 1.5 },
-            'CUP': { weight: 0.9 }, 'LID': { weight: 0.6 }, 'TOY': { weight: 0.7 },
-            'RAG': { weight: 0.4 }, 'TIRE': { weight: 3.0 }, 'LAMP': { weight: 2.0 },
-            'BOOK': { weight: 1.5 }, 'DRUM': { weight: 2.5 }, 'PIPE': { weight: 2.2 },
-            'ROPE': { weight: 1.2 }, 'VASE': { weight: 1.8 }, 'TRAY': { weight: 1.4 },
-            'BOWL': { weight: 1.6 }, 'CAGE': { weight: 2.0 }, 'CHAIR': { weight: 4.0 },
-            'CRATE': { weight: 3.5 }, 'STOOL': { weight: 3.8 }, 'BRICK': { weight: 4.5 },
-            'PLANT': { weight: 2.5 }, 'BOARD': { weight: 3.0 }, 'FRAME': { weight: 2.8 },
-            'CLOCK': { weight: 2.2 }, 'RADIO': { weight: 2.5 }, 'TRUNK': { weight: 5.0 },
-            'BUCKET': { weight: 3.0 }, 'BARREL': { weight: 6.0 }, 'BOTTLE': { weight: 2.0 },
-            'MIRROR': { weight: 4.0 }, 'CARPET': { weight: 5.0 }, 'FRIDGE': { weight: 8.0 },
-            'DRAWER': { weight: 4.5 }, 'LADDER': { weight: 5.5 }, 'HEATER': { weight: 6.0 },
-            'BASKET': { weight: 2.5 }, 'BATHTUB': { weight: 10.0 }, 'BICYCLE': { weight: 7.0 },
-            'MONITOR': { weight: 5.0 }, 'FREEZER': { weight: 9.0 }, 'TOASTER': { weight: 3.0 },
-            'BLENDER': { weight: 3.5 }, 'PRINTER': { weight: 6.0 }, 'CURTAIN': { weight: 2.0 },
+            // 3-letter (weights 1-2)
+            'CAN': { weight: 1 }, 'BAG': { weight: 1 }, 'JAR': { weight: 1 },
+            'BOX': { weight: 1 }, 'MUG': { weight: 1 }, 'PAN': { weight: 2 },
+            'CUP': { weight: 1 }, 'LID': { weight: 1 }, 'TOY': { weight: 1 },
+            'RAG': { weight: 1 }, 'WIG': { weight: 1 }, 'HAT': { weight: 1 },
+            'BRA': { weight: 1 }, 'EGG': { weight: 1 }, 'URN': { weight: 2 },
+
+            // 4-letter (weights 2-3)
+            'TIRE': { weight: 3 }, 'LAMP': { weight: 2 }, 'BOOK': { weight: 2 },
+            'DRUM': { weight: 3 }, 'PIPE': { weight: 2 }, 'ROPE': { weight: 2 },
+            'VASE': { weight: 2 }, 'TRAY': { weight: 2 }, 'BOWL': { weight: 2 },
+            'CAGE': { weight: 2 }, 'SOCK': { weight: 1 }, 'BOOT': { weight: 2 },
+            'FORK': { weight: 1 }, 'CLOG': { weight: 2 }, 'GONG': { weight: 3 },
+            'BUST': { weight: 3 }, 'WAND': { weight: 1 }, 'TUBA': { weight: 4 },
+
+            // 5-letter (weights 3-4)
+            'CHAIR': { weight: 4 }, 'CRATE': { weight: 4 }, 'STOOL': { weight: 4 },
+            'BRICK': { weight: 5 }, 'PLANT': { weight: 3 }, 'BOARD': { weight: 3 },
+            'FRAME': { weight: 3 }, 'CLOCK': { weight: 3 }, 'RADIO': { weight: 3 },
+            'TRUNK': { weight: 5 }, 'SPORK': { weight: 1 }, 'DECOY': { weight: 2 },
+            'GNOME': { weight: 3 }, 'TIARA': { weight: 2 }, 'KEBAB': { weight: 1 },
+            'SQUID': { weight: 2 }, 'BANJO': { weight: 3 }, 'CROCS': { weight: 2 },
+
+            // 6-letter (weights 4-6)
+            'BUCKET': { weight: 3 }, 'BARREL': { weight: 6 }, 'BOTTLE': { weight: 2 },
+            'MIRROR': { weight: 4 }, 'CARPET': { weight: 5 }, 'FRIDGE': { weight: 8 },
+            'DRAWER': { weight: 5 }, 'LADDER': { weight: 6 }, 'HEATER': { weight: 6 },
+            'BASKET': { weight: 3 }, 'FEDORA': { weight: 2 }, 'TURBAN': { weight: 2 },
+            'PIGEON': { weight: 2 }, 'CACTUS': { weight: 3 }, 'TURNIP': { weight: 2 },
+            'WAFFLE': { weight: 1 }, 'DONUT': { weight: 1 }, 'SPONGE': { weight: 1 },
+            'CANOE': { weight: 5 }, 'IGLOO': { weight: 7 }, 'ANCHOR': { weight: 8 },
+
+            // 7-letter (weights 5-8)
+            'BATHTUB': { weight: 8 }, 'BICYCLE': { weight: 7 }, 'MONITOR': { weight: 5 },
+            'FREEZER': { weight: 8 }, 'TOASTER': { weight: 3 }, 'BLENDER': { weight: 4 },
+            'PRINTER': { weight: 6 }, 'CURTAIN': { weight: 3 }, 'UKULELE': { weight: 2 },
+            'SPATULA': { weight: 2 }, 'HAMMOCK': { weight: 4 }, 'PINATA': { weight: 2 },
+            'TRICORN': { weight: 2 }, 'PELICAN': { weight: 3 }, 'COCONUT': { weight: 3 },
+            'PANCAKE': { weight: 1 }, 'BAGPIPE': { weight: 4 }, 'COWBELL': { weight: 3 },
+
+            // 8-letter bonus (weights 6-8)
+            'TROMBONE': { weight: 5 }, 'SOMBRERO': { weight: 2 }, 'UNICYCLE': { weight: 6 },
+            'DOORKNOB': { weight: 3 }, 'FLAMINGO': { weight: 3 }, 'ARMCHAIR': { weight: 7 },
+            'FISHBOWL': { weight: 4 }, 'TRASHCAN': { weight: 4 }, 'BACKPACK': { weight: 4 },
         };
 
         const WORD_LIST = Object.keys(DICTIONARY);
@@ -135,18 +179,26 @@
         // ============================================
         // GAME STATE
         // ============================================
-        let gameState = 'WORD_BUILDING';
+        let gameState = 'INTRO'; // Start with intro dialog
         let showDictionary = false;
+        let dictScrollY = 0; // Scroll position for dictionary
+        let animTime = 0; // Animation timer
 
         // Letters
         let letters = [];
         let selectedOrder = [];
+        let letterAnimationQueue = []; // For intro animation
+        let letterAnimationTimer = 0;
+
+        // Pre-selected words for this round
+        let preSelectedWords = [];
 
         // 3D objects
         let trashPiles = [];
         let currentObject = null;
         let objectMesh = null;
         let activePileIndex = -1;
+        let pendingPileIndex = -1; // Preview of which pile will be used when word is submitted
 
         // Camera state
         let cameraMode = 'DUMPYARD'; // 'DUMPYARD' or 'GRASS'
@@ -161,6 +213,16 @@
         // Messages
         let message = '';
         let messageTimer = 0;
+
+        // Dialog system
+        let dialogActive = false;
+        let dialogLines = [];
+        let currentDialogLine = 0;
+        let currentDialogChar = 0;
+        let dialogCharTimer = 0;
+        let dialogPauseTimer = 0;
+        const DIALOG_CHAR_SPEED = 30; // ms per character
+        const DIALOG_PAUSE_TIME = 1000; // ms pause after line complete
 
         // Fling
         let flingStart = null;
@@ -253,14 +315,20 @@
 
             // Recalculate letter positions
             if (letters.length > 0) {
-                const letterSize = Math.min(30, Math.floor((CONFIG.WIDTH - 40) / CONFIG.LETTER_COUNT) - CONFIG.LETTER_GAP);
+                // Calculate letter size to nearly fill screen width (with small margins)
+                const margin = 16; // 8px on each side
+                const availableWidth = CONFIG.WIDTH - margin;
+                const letterSize = Math.floor((availableWidth - (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP) / CONFIG.LETTER_COUNT);
                 CONFIG.LETTER_SIZE = letterSize;
+                CONFIG.WORD_LETTER_SIZE = Math.floor(letterSize * 1.25); // Word letters 25% bigger
+                CONFIG.WORD_Y = CONFIG.LETTER_Y + CONFIG.LETTER_SIZE + 18; // More gap
 
                 const totalWidth = CONFIG.LETTER_COUNT * CONFIG.LETTER_SIZE + (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP;
                 const startX = (CONFIG.WIDTH - totalWidth) / 2;
 
                 letters.forEach((letter, i) => {
                     letter.poolX = startX + i * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP);
+                    letter.wordY = CONFIG.WORD_Y; // Update word Y position
                     if (!letter.selected) {
                         letter.currentX = letter.poolX;
                     }
@@ -487,47 +555,120 @@
         // ============================================
         // LETTER GENERATION
         // ============================================
-        function generateLetterPool() {
-            const guaranteedWord = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
-            let chars = guaranteedWord.split('');
+        function canFormWord(word, availableLetters) {
+            const letterCounts = {};
+            availableLetters.forEach(c => letterCounts[c] = (letterCounts[c] || 0) + 1);
 
+            for (const c of word) {
+                if (!letterCounts[c] || letterCounts[c] <= 0) return false;
+                letterCounts[c]--;
+            }
+            return true;
+        }
+
+        function getRequiredLetters(words) {
+            // Get minimum letters needed to form all words
+            const maxCounts = {};
+            for (const word of words) {
+                const counts = {};
+                for (const c of word) {
+                    counts[c] = (counts[c] || 0) + 1;
+                }
+                for (const [c, count] of Object.entries(counts)) {
+                    maxCounts[c] = Math.max(maxCounts[c] || 0, count);
+                }
+            }
+
+            let letters = [];
+            for (const [c, count] of Object.entries(maxCounts)) {
+                for (let i = 0; i < count; i++) {
+                    letters.push(c);
+                }
+            }
+            return letters;
+        }
+
+        function generateLetterPool() {
+            // Strategy: Pick 16 words that share letters efficiently
+            // Then generate a letter pool that can form all of them
+
+            let bestWords = [];
+            let bestLetters = [];
+
+            for (let attempt = 0; attempt < 50; attempt++) {
+                // Shuffle word list and try to pick 16 words that fit in 12 letters
+                const shuffled = [...WORD_LIST].sort(() => Math.random() - 0.5);
+                const candidateWords = [];
+                let candidateLetters = [];
+
+                for (const word of shuffled) {
+                    if (candidateWords.length >= CONFIG.PILE_COUNT) break;
+
+                    // Check if adding this word would require too many letters
+                    const testWords = [...candidateWords, word];
+                    const required = getRequiredLetters(testWords);
+
+                    if (required.length <= CONFIG.LETTER_COUNT) {
+                        candidateWords.push(word);
+                        candidateLetters = required;
+                    }
+                }
+
+                if (candidateWords.length >= CONFIG.PILE_COUNT) {
+                    bestWords = candidateWords;
+                    bestLetters = candidateLetters;
+                    break;
+                }
+
+                // Keep best attempt so far
+                if (candidateWords.length > bestWords.length) {
+                    bestWords = candidateWords;
+                    bestLetters = candidateLetters;
+                }
+            }
+
+            // Store the 16 pre-selected words for this game (sorted alphabetically for display)
+            preSelectedWords = bestWords.slice(0, CONFIG.PILE_COUNT).sort((a, b) => a.localeCompare(b));
+
+            // Start with required letters
+            let chars = [...bestLetters];
+
+            // Pad to 12 letters with useful letters
+            const vowels = 'EEEEAAAIIIOOU';
+            const consonants = 'TTNNSSRRHHLLDDCCMMBBPPFFGGWW';
             const letterCount = {};
             chars.forEach(c => letterCount[c] = (letterCount[c] || 0) + 1);
 
-            const vowels = 'EEEEAAAIIIOOU';
-            const consonants = 'TTNNSSRRHHLLDDCCMMFFGGPPBBWWKKVVJXQZ';
-
-            let addedConsonants = 0;
-            let addedVowels = 0;
-
             while (chars.length < CONFIG.LETTER_COUNT) {
-                let pool;
-                if (addedConsonants < 2 && chars.length >= CONFIG.LETTER_COUNT - 2) {
-                    pool = consonants;
-                } else if (addedVowels < 2 && chars.length >= CONFIG.LETTER_COUNT - 2) {
-                    pool = vowels;
-                } else {
-                    pool = Math.random() < 0.4 ? vowels : consonants;
-                }
-
+                const vowelCount = chars.filter(c => 'AEIOU'.includes(c)).length;
+                const pool = vowelCount < 4 ? vowels : consonants;
                 const letter = pool[Math.floor(Math.random() * pool.length)];
 
                 if ((letterCount[letter] || 0) < 3) {
                     chars.push(letter);
                     letterCount[letter] = (letterCount[letter] || 0) + 1;
-                    if (vowels.includes(letter)) addedVowels++;
-                    else addedConsonants++;
                 }
             }
 
-            // Shuffle
+            // Shuffle the letters
             for (let i = chars.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [chars[i], chars[j]] = [chars[j], chars[i]];
             }
 
+            // Calculate letter sizes to fill screen
+            const margin = 16;
+            const availableWidth = CONFIG.WIDTH - margin;
+            CONFIG.LETTER_SIZE = Math.floor((availableWidth - (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP) / CONFIG.LETTER_COUNT);
+            CONFIG.WORD_LETTER_SIZE = Math.floor(CONFIG.LETTER_SIZE * 1.25);
+            CONFIG.WORD_Y = CONFIG.LETTER_Y + CONFIG.LETTER_SIZE + 18;
+
             const totalWidth = CONFIG.LETTER_COUNT * CONFIG.LETTER_SIZE + (CONFIG.LETTER_COUNT - 1) * CONFIG.LETTER_GAP;
             const startX = (CONFIG.WIDTH - totalWidth) / 2;
+
+            // Create letters - start at bottom center (tiny) for intro animation
+            const centerX = CONFIG.WIDTH / 2;
+            const bottomY = CONFIG.HEIGHT + 20;
 
             letters = chars.map((char, i) => ({
                 char: char,
@@ -535,13 +676,23 @@
                 poolY: CONFIG.LETTER_Y,
                 wordX: 0,
                 wordY: CONFIG.WORD_Y,
-                currentX: startX + i * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP),
-                currentY: CONFIG.LETTER_Y,
+                currentX: centerX,
+                currentY: bottomY,
+                currentSize: 5,
+                targetSize: CONFIG.LETTER_SIZE,
                 selected: false,
-                animating: false
+                animating: true,
+                revealed: false
             }));
 
             selectedOrder = [];
+
+            // Setup animation queue
+            letterAnimationQueue = [];
+            for (let i = 0; i < letters.length; i++) {
+                letterAnimationQueue.push(i);
+            }
+            letterAnimationTimer = 0;
         }
 
         function getSelectedWord() {
@@ -556,11 +707,12 @@
             const count = selectedOrder.length;
             if (count === 0) return;
 
-            const totalWidth = count * CONFIG.LETTER_SIZE + (count - 1) * CONFIG.LETTER_GAP;
+            const wordLetterSize = CONFIG.WORD_LETTER_SIZE;
+            const totalWidth = count * wordLetterSize + (count - 1) * CONFIG.LETTER_GAP;
             const startX = (CONFIG.WIDTH - totalWidth) / 2;
 
             selectedOrder.forEach((letterIndex, orderIndex) => {
-                letters[letterIndex].wordX = startX + orderIndex * (CONFIG.LETTER_SIZE + CONFIG.LETTER_GAP);
+                letters[letterIndex].wordX = startX + orderIndex * (wordLetterSize + CONFIG.LETTER_GAP);
             });
         }
 
@@ -570,6 +722,7 @@
             letters[index].animating = true;
             selectedOrder.push(index);
             updateWordPositions();
+            updatePendingPile();
         }
 
         function deselectLetter(index) {
@@ -584,6 +737,32 @@
             selectedOrder.splice(orderPos, 1);
 
             updateWordPositions();
+            updatePendingPile();
+        }
+
+        function updatePendingPile() {
+            const word = getSelectedWord();
+
+            if (isValidWord(word)) {
+                // Find an active pile to preview
+                const activePiles = trashPiles.map((p, i) => ({ pile: p, index: i })).filter(p => p.pile.active);
+                if (activePiles.length > 0) {
+                    // Use a deterministic selection based on word (so it doesn't change while typing)
+                    const hash = word.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                    const chosen = activePiles[hash % activePiles.length];
+                    pendingPileIndex = chosen.index;
+
+                    // Move camera to show the pending pile
+                    const pile = trashPiles[pendingPileIndex];
+                    targetCameraPos.set(pile.x, 6, pile.z - 15);
+                    targetCameraLook.set(pile.x, 2, pile.z + 30);
+                }
+            } else {
+                // No valid word - reset to default view
+                pendingPileIndex = -1;
+                targetCameraPos.set(0, 5, -10);
+                targetCameraLook.set(0, 0, 50);
+            }
         }
 
         // ============================================
@@ -592,9 +771,11 @@
         function renderUI() {
             uiCtx.clearRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
-            // Top panel
-            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-            uiCtx.fillRect(0, 0, CONFIG.WIDTH, 95);
+            // Increment animation time
+            animTime += 0.05;
+
+            // Score at top of sky
+            renderTopScore();
 
             renderLetterPool();
             renderWordArea();
@@ -610,17 +791,21 @@
                 uiCtx.fillText(message, CONFIG.WIDTH / 2, CONFIG.HEIGHT / 2 + 8);
             }
 
-            // Fling instructions
+            // Fling instructions - no background, use shadows
             if (gameState === 'FLING' && currentObject) {
-                uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
-                uiCtx.fillRect(50, CONFIG.HEIGHT - 160, CONFIG.WIDTH - 100, 50);
-                uiCtx.fillStyle = '#FFF';
-                uiCtx.font = '16px Arial';
+                uiCtx.font = '18px Arial';
                 uiCtx.textAlign = 'center';
+                // Shadow
+                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                uiCtx.fillText('Drag down to throw forward!', CONFIG.WIDTH / 2 + 1, CONFIG.HEIGHT - 138 + 1);
+                uiCtx.fillStyle = '#FFF';
                 uiCtx.fillText('Drag down to throw forward!', CONFIG.WIDTH / 2, CONFIG.HEIGHT - 138);
-                uiCtx.font = '12px Arial';
-                uiCtx.fillStyle = '#AAA';
-                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight.toFixed(1)}`, CONFIG.WIDTH / 2, CONFIG.HEIGHT - 120);
+
+                uiCtx.font = '14px Arial';
+                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight}`, CONFIG.WIDTH / 2 + 1, CONFIG.HEIGHT - 115 + 1);
+                uiCtx.fillStyle = '#DDD';
+                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight}`, CONFIG.WIDTH / 2, CONFIG.HEIGHT - 115);
             }
 
             // Fling indicator
@@ -637,31 +822,133 @@
             }
         }
 
+        function renderTopScore() {
+            const topY = 32; // More space from top
+
+            // Score on left with wave animation on digits - bigger and thicker
+            const scoreStr = score.toString();
+            uiCtx.font = 'bold 42px Arial';
+            uiCtx.textAlign = 'left';
+            uiCtx.textBaseline = 'middle';
+
+            let xPos = 12;
+            for (let i = 0; i < scoreStr.length; i++) {
+                const digit = scoreStr[i];
+                const waveOffset = Math.sin(animTime * 0.5 + i * 1.2) * 3; // Slower wave
+
+                // Thicker shadow/outline effect
+                uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
+                uiCtx.fillText(digit, xPos + 3, topY + waveOffset + 3);
+                uiCtx.fillText(digit, xPos + 2, topY + waveOffset + 2);
+
+                // Gold text
+                uiCtx.fillStyle = '#FFD700';
+                uiCtx.fillText(digit, xPos, topY + waveOffset);
+
+                xPos += uiCtx.measureText(digit).width + 2;
+            }
+
+            // Dictionary button on right
+            const btnWidth = 130;
+            const btnHeight = 40;
+            const btnX = CONFIG.WIDTH - btnWidth - 10;
+            const btnY = 12;
+
+            if (showDictionary) {
+                // Glowing effect when dictionary is open
+                const glowIntensity = 0.4 + Math.sin(animTime * 2) * 0.2;
+                uiCtx.shadowColor = `rgba(100, 200, 255, ${glowIntensity})`;
+                uiCtx.shadowBlur = 15;
+
+                // Shadow
+                uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, 8);
+                uiCtx.fill();
+
+                // Active state - brighter blue
+                uiCtx.fillStyle = '#4a90d9';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.fill();
+
+                uiCtx.strokeStyle = '#6ab0f9';
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.stroke();
+
+                // Reset shadow
+                uiCtx.shadowColor = 'transparent';
+                uiCtx.shadowBlur = 0;
+            } else {
+                // Normal state
+                uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, 8);
+                uiCtx.fill();
+
+                uiCtx.fillStyle = '#555';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.fill();
+
+                uiCtx.strokeStyle = '#888';
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.stroke();
+            }
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = 'bold 18px Arial';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('DICTIONARY', btnX + btnWidth / 2, btnY + btnHeight / 2);
+        }
+
         function renderLetterPool() {
             for (let i = 0; i < letters.length; i++) {
                 const letter = letters[i];
                 if (letter.selected) continue;
+                if (!letter.revealed) continue; // Don't render unrevealed letters
+
+                const size = letter.currentSize || CONFIG.LETTER_SIZE;
+                const fontSize = Math.floor(size * 0.6);
 
                 const x = letter.currentX;
                 const y = letter.currentY;
 
+                // Shadow for depth
+                uiCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                uiCtx.fillRect(x + 2, y + 2, size, size);
+
+                // Box
                 uiCtx.fillStyle = '#4a90d9';
-                uiCtx.fillRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.fillRect(x, y, size, size);
+
                 uiCtx.strokeStyle = '#2a5a89';
                 uiCtx.lineWidth = 2;
-                uiCtx.strokeRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.strokeRect(x, y, size, size);
 
-                uiCtx.fillStyle = '#FFF';
-                uiCtx.font = 'bold 18px Arial';
+                // Letter with shadow
+                uiCtx.font = `bold ${fontSize}px Arial`;
                 uiCtx.textAlign = 'center';
                 uiCtx.textBaseline = 'middle';
-                uiCtx.fillText(letter.char, x + CONFIG.LETTER_SIZE / 2, y + CONFIG.LETTER_SIZE / 2);
+
+                uiCtx.fillStyle = 'rgba(0,0,0,0.3)';
+                uiCtx.fillText(letter.char, x + size / 2 + 1, y + size / 2 + 1);
+
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.fillText(letter.char, x + size / 2, y + size / 2);
             }
         }
 
         function renderWordArea() {
             const word = getSelectedWord();
             const isValid = isValidWord(word);
+            const size = CONFIG.WORD_LETTER_SIZE;
+            const fontSize = Math.floor(size * 0.6);
 
             for (let orderIndex = 0; orderIndex < selectedOrder.length; orderIndex++) {
                 const letterIndex = selectedOrder[orderIndex];
@@ -670,73 +957,224 @@
                 const x = letter.currentX;
                 const y = letter.currentY;
 
+                // Shadow for depth
+                uiCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                uiCtx.fillRect(x + 2, y + 2, size, size);
+
+                // Box
                 uiCtx.fillStyle = isValid ? '#3d8a3d' : '#5a5a6a';
-                uiCtx.fillRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.fillRect(x, y, size, size);
                 uiCtx.strokeStyle = isValid ? '#2d6a2d' : '#3a3a4a';
                 uiCtx.lineWidth = 2;
-                uiCtx.strokeRect(x, y, CONFIG.LETTER_SIZE, CONFIG.LETTER_SIZE);
+                uiCtx.strokeRect(x, y, size, size);
 
-                uiCtx.fillStyle = '#FFF';
-                uiCtx.font = 'bold 18px Arial';
+                // Letter with shadow
+                uiCtx.font = `bold ${fontSize}px Arial`;
                 uiCtx.textAlign = 'center';
                 uiCtx.textBaseline = 'middle';
-                uiCtx.fillText(letter.char, x + CONFIG.LETTER_SIZE / 2, y + CONFIG.LETTER_SIZE / 2);
+
+                uiCtx.fillStyle = 'rgba(0,0,0,0.3)';
+                uiCtx.fillText(letter.char, x + size / 2 + 1, y + size / 2 + 1);
+
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.fillText(letter.char, x + size / 2, y + size / 2);
             }
 
             if (isValid) {
-                const btnWidth = 80;
-                const btnHeight = 24;
+                // Pulsing animation - slower (half speed)
+                const pulseScale = 1 + Math.sin(animTime * 2) * 0.03;
+                const baseBtnWidth = 160;
+                const baseBtnHeight = 50;
+                const btnWidth = baseBtnWidth * pulseScale;
+                const btnHeight = baseBtnHeight * pulseScale;
                 const btnX = (CONFIG.WIDTH - btnWidth) / 2;
-                const btnY = CONFIG.WORD_Y + CONFIG.LETTER_SIZE + 5;
+                const btnY = CONFIG.WORD_Y + size + 18 - (btnHeight - baseBtnHeight) / 2;
 
-                uiCtx.fillStyle = '#4CAF50';
-                uiCtx.fillRect(btnX, btnY, btnWidth, btnHeight);
+                // Glow effect - subtler
+                const glowIntensity = 0.2 + Math.sin(animTime * 2) * 0.1;
+                uiCtx.shadowColor = `rgba(76, 175, 80, ${glowIntensity})`;
+                uiCtx.shadowBlur = 12 + Math.sin(animTime * 2) * 4;
+
+                // Button shadow
+                uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX + 3, btnY + 3, btnWidth, btnHeight, 10);
+                uiCtx.fill();
+
+                // Button gradient
+                const gradient = uiCtx.createLinearGradient(btnX, btnY, btnX, btnY + btnHeight);
+                gradient.addColorStop(0, '#5CBF60');
+                gradient.addColorStop(0.5, '#4CAF50');
+                gradient.addColorStop(1, '#3D8B40');
+                uiCtx.fillStyle = gradient;
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 10);
+                uiCtx.fill();
+
+                // Reset shadow
+                uiCtx.shadowColor = 'transparent';
+                uiCtx.shadowBlur = 0;
+
+                // Border
                 uiCtx.strokeStyle = '#2d7a2d';
-                uiCtx.lineWidth = 2;
-                uiCtx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+                uiCtx.lineWidth = 3;
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 10);
+                uiCtx.stroke();
 
-                uiCtx.fillStyle = '#FFF';
-                uiCtx.font = 'bold 12px Arial';
+                // Highlight
+                uiCtx.fillStyle = 'rgba(255,255,255,0.2)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(btnX + 4, btnY + 4, btnWidth - 8, btnHeight / 2 - 4, 6);
+                uiCtx.fill();
+
+                // Text - scales with button
+                const baseFontSize = 22;
+                const fontSize = baseFontSize * pulseScale;
+                uiCtx.font = `bold ${fontSize}px Arial`;
                 uiCtx.textAlign = 'center';
                 uiCtx.textBaseline = 'middle';
+                uiCtx.fillStyle = 'rgba(0,0,0,0.3)';
+                uiCtx.fillText('THROW IT!', CONFIG.WIDTH / 2 + 1, btnY + btnHeight / 2 + 1);
+                uiCtx.fillStyle = '#FFF';
                 uiCtx.fillText('THROW IT!', CONFIG.WIDTH / 2, btnY + btnHeight / 2);
             }
         }
 
         function renderBottomUI() {
-            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-            uiCtx.fillRect(0, CONFIG.HEIGHT - 35, CONFIG.WIDTH, 35);
+            // Show dialog box instead of tidiness when dialog is active
+            if (dialogActive) {
+                renderDialogBox();
+                return;
+            }
 
-            const pilesLeft = trashPiles.filter(p => p.active).length;
-            uiCtx.fillStyle = '#AAA';
-            uiCtx.font = '14px Arial';
+            const pilesCleared = CONFIG.PILE_COUNT - trashPiles.filter(p => p.active).length;
+
+            // Progress squares - bigger, no wave animation
+            const squareSize = 22;
+            const squareGap = 4;
+            const totalWidth = CONFIG.PILE_COUNT * squareSize + (CONFIG.PILE_COUNT - 1) * squareGap;
+            const startX = (CONFIG.WIDTH - totalWidth) / 2;
+            const squareY = CONFIG.HEIGHT - 45;
+
+            // "TIDINESS" label - left aligned above progress bar, 50% bigger
+            uiCtx.font = 'bold 21px Arial';
             uiCtx.textAlign = 'left';
             uiCtx.textBaseline = 'middle';
-            uiCtx.fillText(`Piles: ${pilesLeft}/${CONFIG.PILE_COUNT}`, 15, CONFIG.HEIGHT - 17);
+            uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
+            uiCtx.fillText('TIDINESS', startX + 1, squareY - 18 + 1);
+            uiCtx.fillStyle = '#CCC';
+            uiCtx.fillText('TIDINESS', startX, squareY - 18);
 
+            for (let i = 0; i < CONFIG.PILE_COUNT; i++) {
+                const x = startX + i * (squareSize + squareGap);
+                const isFilled = i < pilesCleared;
+
+                // Shadow
+                uiCtx.fillStyle = 'rgba(0,0,0,0.3)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(x + 2, squareY + 2, squareSize, squareSize, 5);
+                uiCtx.fill();
+
+                if (isFilled) {
+                    // Filled - very subtle color cycling (softer)
+                    const hue = 120 + Math.sin(animTime * 0.5 + i * 0.15) * 10; // Slower, subtler
+                    const lightness = 50 + Math.sin(animTime * 0.7 + i * 0.2) * 5; // Softer brightness
+                    uiCtx.fillStyle = `hsl(${hue}, 60%, ${lightness}%)`;
+                } else {
+                    // Empty - dark gray
+                    uiCtx.fillStyle = 'rgba(60, 60, 60, 0.8)';
+                }
+
+                uiCtx.beginPath();
+                uiCtx.roundRect(x, squareY, squareSize, squareSize, 5);
+                uiCtx.fill();
+
+                // Highlight on filled squares
+                if (isFilled) {
+                    uiCtx.fillStyle = 'rgba(255,255,255,0.2)';
+                    uiCtx.beginPath();
+                    uiCtx.roundRect(x + 3, squareY + 3, squareSize - 6, squareSize / 2 - 2, 3);
+                    uiCtx.fill();
+                }
+            }
+        }
+
+        function renderDialogBox() {
+            const boxY = CONFIG.HEIGHT - 75;
+            const boxHeight = 70;
+            const boxX = 10;
+            const boxWidth = CONFIG.WIDTH - 20;
+
+            // Box background
+            uiCtx.fillStyle = 'rgba(20, 30, 40, 0.95)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, 10);
+            uiCtx.fill();
+
+            // Box border
+            uiCtx.strokeStyle = 'rgba(100, 140, 180, 0.6)';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, 10);
+            uiCtx.stroke();
+
+            // Profile picture placeholder (empty square)
+            const picSize = 50;
+            const picX = boxX + 10;
+            const picY = boxY + 10;
+
+            uiCtx.fillStyle = 'rgba(80, 100, 120, 0.8)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(picX, picY, picSize, picSize, 6);
+            uiCtx.fill();
+
+            uiCtx.strokeStyle = 'rgba(120, 150, 180, 0.8)';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(picX, picY, picSize, picSize, 6);
+            uiCtx.stroke();
+
+            // "BOSS" title
+            uiCtx.font = 'bold 14px Arial';
+            uiCtx.textAlign = 'left';
+            uiCtx.textBaseline = 'top';
             uiCtx.fillStyle = '#FFD700';
-            uiCtx.font = 'bold 18px Arial';
-            uiCtx.textAlign = 'center';
-            uiCtx.fillText(score.toString(), CONFIG.WIDTH / 2, CONFIG.HEIGHT - 17);
+            uiCtx.fillText('BOSS', picX + picSize + 12, picY + 2);
 
-            uiCtx.fillStyle = '#666';
-            uiCtx.fillRect(CONFIG.WIDTH - 55, CONFIG.HEIGHT - 30, 45, 25);
-            uiCtx.strokeStyle = '#888';
-            uiCtx.lineWidth = 1;
-            uiCtx.strokeRect(CONFIG.WIDTH - 55, CONFIG.HEIGHT - 30, 45, 25);
-            uiCtx.fillStyle = '#FFF';
-            uiCtx.font = '11px Arial';
-            uiCtx.textAlign = 'center';
-            uiCtx.textBaseline = 'middle';
-            uiCtx.fillText('DICT', CONFIG.WIDTH - 32, CONFIG.HEIGHT - 17);
+            // Dialog text (character by character)
+            if (dialogLines.length > 0 && currentDialogLine < dialogLines.length) {
+                const fullLine = dialogLines[currentDialogLine];
+                const displayText = fullLine.substring(0, currentDialogChar);
+
+                uiCtx.font = '16px Arial';
+                uiCtx.fillStyle = '#FFF';
+                uiCtx.textBaseline = 'top';
+                uiCtx.fillText(displayText, picX + picSize + 12, picY + 22);
+            }
         }
 
         function renderFlingIndicator() {
             const pullX = flingCurrent.x - flingStart.x;
             const pullY = flingCurrent.y - flingStart.y;
-            const power = Math.min(Math.sqrt(pullX * pullX + pullY * pullY), 150);
+            const rawPull = Math.sqrt(pullX * pullX + pullY * pullY);
 
-            if (power < 10) return;
+            // Only show meaningful indicator when pulling down (forward throw)
+            if (pullY <= 0) {
+                if (rawPull > 5) {
+                    uiCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    uiCtx.font = '14px Arial';
+                    uiCtx.textAlign = 'center';
+                    uiCtx.fillText('↓ Pull down to throw ↓', flingStart.x, flingStart.y + 30);
+                }
+                return;
+            }
+
+            // Non-linear power: sqrt curve for easier precision at low power
+            // Max raw pull is 200 pixels, maps to 100%
+            const maxRawPull = 200;
+            const clampedPull = Math.min(rawPull, maxRawPull);
+            const power = Math.max(1, 100 * Math.sqrt(clampedPull / maxRawPull));
 
             // Pull line (where finger dragged)
             uiCtx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
@@ -748,15 +1186,13 @@
             uiCtx.stroke();
             uiCtx.setLineDash([]);
 
-            // Throw direction indicator (pull down = throw forward shown as up arrow)
-            const throwLength = power * 0.6;
-            // Visual: show arrow going "into" the screen (upward on 2D = forward in 3D)
-            const visualAngle = -Math.PI / 2; // Always point up for "forward"
+            // Throw direction indicator - always points UP (forward into screen)
+            const throwLength = power * 0.8;
             const throwEndX = flingStart.x;
-            const throwEndY = flingStart.y - throwLength * (pullY > 0 ? 1 : -1);
+            const throwEndY = flingStart.y - throwLength;
 
-            uiCtx.strokeStyle = `rgba(255, 80, 80, ${0.5 + power / 300})`;
-            uiCtx.lineWidth = 4 + power / 30;
+            uiCtx.strokeStyle = `rgba(255, 80, 80, ${0.5 + power / 200})`;
+            uiCtx.lineWidth = 4 + power / 25;
             uiCtx.lineCap = 'round';
 
             uiCtx.beginPath();
@@ -764,63 +1200,159 @@
             uiCtx.lineTo(throwEndX, throwEndY);
             uiCtx.stroke();
 
-            // Arrowhead
-            const arrowAngle = throwEndY < flingStart.y ? -Math.PI / 2 : Math.PI / 2;
+            // Arrowhead pointing up
             uiCtx.beginPath();
             uiCtx.moveTo(throwEndX, throwEndY);
-            uiCtx.lineTo(throwEndX - 12 * Math.cos(arrowAngle - 0.5), throwEndY - 12 * Math.sin(arrowAngle - 0.5));
+            uiCtx.lineTo(throwEndX - 12, throwEndY + 15);
             uiCtx.moveTo(throwEndX, throwEndY);
-            uiCtx.lineTo(throwEndX - 12 * Math.cos(arrowAngle + 0.5), throwEndY - 12 * Math.sin(arrowAngle + 0.5));
+            uiCtx.lineTo(throwEndX + 12, throwEndY + 15);
             uiCtx.stroke();
 
             // Power indicator
-            uiCtx.fillStyle = '#FFF';
-            uiCtx.font = 'bold 14px Arial';
+            uiCtx.font = 'bold 16px Arial';
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'bottom';
-            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x, Math.min(flingStart.y, throwEndY) - 15);
+            uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
+            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x + 1, throwEndY - 9);
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x, throwEndY - 10);
         }
 
         function renderDictionaryPopup() {
-            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-            uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+            // Dictionary starts below word letters but leaves room for THROW IT button
+            const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80; // Leave room for button
 
-            uiCtx.fillStyle = '#FFD700';
-            uiCtx.font = 'bold 24px Arial';
-            uiCtx.textAlign = 'center';
-            uiCtx.textBaseline = 'top';
-            uiCtx.fillText('OBJECT DICTIONARY', CONFIG.WIDTH / 2, 30);
+            // Smaller dictionary window - show 8 words
+            const rowHeight = 52;
+            const targetVisibleRows = 8;
+            const dictHeight = Math.min(rowHeight * targetVisibleRows + 20, CONFIG.HEIGHT - dictStartY - 85);
 
-            uiCtx.fillStyle = '#AAA';
-            uiCtx.font = '12px Arial';
-            uiCtx.fillText('(tap anywhere to close)', CONFIG.WIDTH / 2, 58);
+            // Lighter background
+            uiCtx.fillStyle = 'rgba(30, 40, 50, 0.95)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(5, dictStartY, CONFIG.WIDTH - 10, dictHeight, 12);
+            uiCtx.fill();
 
-            const words = WORD_LIST.slice().sort((a, b) => a.localeCompare(b));
-            const cols = 3;
-            const rowHeight = 26;
-            const colWidth = CONFIG.WIDTH / cols;
-            const startY = 90;
+            // Border
+            uiCtx.strokeStyle = 'rgba(100, 120, 140, 0.5)';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(5, dictStartY, CONFIG.WIDTH - 10, dictHeight, 12);
+            uiCtx.stroke();
 
-            uiCtx.textAlign = 'left';
-            uiCtx.textBaseline = 'middle';
+            // Build word list: pre-selected words first (these are the 16 for this game), then rest
+            const preSelectedSorted = preSelectedWords.slice().sort((a, b) => a.localeCompare(b));
+            const otherWords = WORD_LIST.filter(w => !preSelectedWords.includes(w)).sort((a, b) => a.localeCompare(b));
+            const allWords = [...preSelectedSorted, ...otherWords];
 
-            for (let i = 0; i < words.length; i++) {
-                const word = words[i];
-                const col = i % cols;
-                const row = Math.floor(i / cols);
-                const x = 15 + col * colWidth;
-                const y = startY + row * rowHeight;
+            const startY = dictStartY + 10;
+            const listHeight = dictHeight - 20;
+            const visibleRows = Math.floor(listHeight / rowHeight);
+            const maxScroll = Math.max(0, allWords.length - visibleRows);
 
-                if (y > CONFIG.HEIGHT - 50) continue;
+            // Scrollbar dimensions
+            const scrollbarWidth = 24;
+            const scrollbarX = CONFIG.WIDTH - scrollbarWidth - 15;
+            const trackY = startY + 5;
+            const trackHeight = listHeight - 10;
 
-                const hue = 60 + word.length * 25;
-                uiCtx.font = '13px Arial';
-                uiCtx.fillStyle = `hsl(${hue}, 60%, 65%)`;
-                uiCtx.fillText(word, x, y);
+            // Clamp scroll
+            dictScrollY = Math.max(0, Math.min(dictScrollY, maxScroll));
 
-                uiCtx.fillStyle = '#666';
-                uiCtx.font = '10px Arial';
-                uiCtx.fillText(`(${DICTIONARY[word].weight})`, x + 52, y);
+            const startIndex = Math.floor(dictScrollY);
+            const endIndex = Math.min(startIndex + visibleRows + 1, allWords.length);
+
+            // List area
+            const listX = 15;
+            const listWidth = CONFIG.WIDTH - scrollbarWidth - 40;
+
+            uiCtx.save();
+            uiCtx.beginPath();
+            uiCtx.rect(0, startY, CONFIG.WIDTH, listHeight);
+            uiCtx.clip();
+
+            for (let i = startIndex; i < endIndex; i++) {
+                const word = allWords[i];
+                const y = startY + (i - dictScrollY) * rowHeight;
+                const isPreSelected = preSelectedWords.includes(word);
+
+                // Row background
+                if (isPreSelected) {
+                    // Green background for pre-selected words (the 16 for this game)
+                    uiCtx.fillStyle = 'rgba(60, 140, 60, 0.3)';
+                    uiCtx.fillRect(listX, y, listWidth, rowHeight - 2);
+                } else if (i % 2 === 0) {
+                    uiCtx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                    uiCtx.fillRect(listX, y, listWidth, rowHeight - 2);
+                }
+
+                // Word name - left aligned
+                const hue = 40 + word.length * 20;
+                uiCtx.font = 'bold 26px Arial';
+                uiCtx.fillStyle = isPreSelected ? '#8f8' : `hsl(${hue}, 70%, 70%)`;
+                uiCtx.textAlign = 'left';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText(word, listX + 10, y + rowHeight / 2);
+
+                // Weight boxes
+                const weight = DICTIONARY[word].weight;
+                const weightX = listX + listWidth - 8;
+                const boxSize = 14;
+                const boxGap = 4;
+
+                for (let w = 0; w < 8; w++) {
+                    const bx = weightX - (8 - w) * (boxSize + boxGap);
+                    const by = y + rowHeight / 2 - boxSize / 2;
+
+                    if (w < weight) {
+                        const wHue = 120 - weight * 12;
+                        uiCtx.fillStyle = `hsl(${wHue}, 65%, 55%)`;
+                    } else {
+                        uiCtx.fillStyle = 'rgba(255,255,255,0.1)';
+                    }
+
+                    uiCtx.beginPath();
+                    uiCtx.roundRect(bx, by, boxSize, boxSize, 3);
+                    uiCtx.fill();
+                }
+            }
+
+            uiCtx.restore();
+
+            // Scrollbar track
+            uiCtx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(scrollbarX, trackY, scrollbarWidth, trackHeight, scrollbarWidth / 2);
+            uiCtx.fill();
+
+            // Scrollbar thumb
+            if (allWords.length > visibleRows) {
+                const thumbHeight = Math.max(50, (visibleRows / allWords.length) * trackHeight);
+                const thumbY = trackY + (dictScrollY / maxScroll) * (trackHeight - thumbHeight);
+
+                const gradient = uiCtx.createLinearGradient(scrollbarX, 0, scrollbarX + scrollbarWidth, 0);
+                gradient.addColorStop(0, '#666');
+                gradient.addColorStop(0.5, '#888');
+                gradient.addColorStop(1, '#666');
+                uiCtx.fillStyle = gradient;
+                uiCtx.beginPath();
+                uiCtx.roundRect(scrollbarX, thumbY, scrollbarWidth, thumbHeight, scrollbarWidth / 2);
+                uiCtx.fill();
+
+                uiCtx.fillStyle = 'rgba(255,255,255,0.2)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(scrollbarX + 3, thumbY + 3, scrollbarWidth - 6, thumbHeight - 6, (scrollbarWidth - 6) / 2);
+                uiCtx.fill();
+
+                renderDictionaryPopup.scrollbar = {
+                    x: scrollbarX,
+                    y: trackY,
+                    width: scrollbarWidth,
+                    height: trackHeight,
+                    thumbY: thumbY,
+                    thumbHeight: thumbHeight,
+                    maxScroll: maxScroll
+                };
             }
         }
 
@@ -870,6 +1402,14 @@
                 e.preventDefault();
                 handlePointerEnd(e.changedTouches[0]);
             });
+
+            // Mouse wheel for dictionary scroll
+            uiCanvas.addEventListener('wheel', (e) => {
+                if (showDictionary) {
+                    e.preventDefault();
+                    dictScrollY += e.deltaY * 0.02;
+                }
+            }, { passive: false });
         }
 
         function getCanvasCoords(event) {
@@ -882,11 +1422,90 @@
             };
         }
 
+        // Dictionary scroll state
+        let dictDragStart = null;
+        let dictDragScrollStart = 0;
+        let dictScrollbarDrag = false;
+
         function handlePointerStart(event) {
             const pos = getCanvasCoords(event);
 
+            // During intro dialog, tapping advances or skips
+            if (gameState === 'INTRO' && dialogActive) {
+                // If line is still typing, complete it instantly
+                if (currentDialogChar < dialogLines[currentDialogLine].length) {
+                    currentDialogChar = dialogLines[currentDialogLine].length;
+                    dialogPauseTimer = 0;
+                } else {
+                    // Move to next line
+                    currentDialogLine++;
+                    currentDialogChar = 0;
+                    dialogPauseTimer = 0;
+
+                    if (currentDialogLine >= dialogLines.length) {
+                        dialogActive = false;
+                        startLetterReveal();
+                    }
+                }
+                return;
+            }
+
+            // During letter reveal, can't interact
+            if (gameState === 'LETTER_REVEAL') {
+                return;
+            }
+
+            // Dictionary button - top right (130x40) - always check this first (but not during intro)
+            const dictBtnWidth = 130;
+            const dictBtnHeight = 40;
+            const dictBtnX = CONFIG.WIDTH - dictBtnWidth - 10;
+            const dictBtnY = 12;
+
+            if (pos.x >= dictBtnX && pos.x <= dictBtnX + dictBtnWidth &&
+                pos.y >= dictBtnY && pos.y <= dictBtnY + dictBtnHeight) {
+                showDictionary = !showDictionary; // Toggle dictionary
+                return;
+            }
+
+            // Check letter interactions (works even with dictionary open)
+            if (gameState === 'WORD_BUILDING') {
+                // Pool letters (anagram row)
+                for (let i = 0; i < letters.length; i++) {
+                    if (letters[i].selected) continue;
+                    if (!letters[i].revealed) continue;
+                    const letter = letters[i];
+                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + CONFIG.LETTER_SIZE &&
+                        pos.y >= letter.currentY && pos.y <= letter.currentY + CONFIG.LETTER_SIZE) {
+                        selectLetter(i);
+                        return;
+                    }
+                }
+            }
+
             if (showDictionary) {
-                showDictionary = false;
+                const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80;
+
+                // Only interact with dictionary scrollbar if clicking within dictionary area
+                if (pos.y >= dictStartY) {
+                    const sb = renderDictionaryPopup.scrollbar;
+                    if (sb && pos.x >= sb.x && pos.x <= sb.x + sb.width) {
+                        if (pos.y >= sb.y && pos.y <= sb.y + sb.height) {
+                            dictScrollbarDrag = true;
+                            if (pos.y < sb.thumbY || pos.y > sb.thumbY + sb.thumbHeight) {
+                                const clickRatio = (pos.y - sb.y) / sb.height;
+                                dictScrollY = clickRatio * sb.maxScroll;
+                            }
+                            dictDragStart = pos.y;
+                            dictDragScrollStart = dictScrollY;
+                            return;
+                        }
+                    }
+
+                    // Start drag scroll on list area
+                    dictDragStart = pos.y;
+                    dictDragScrollStart = dictScrollY;
+                    dictScrollbarDrag = false;
+                }
                 return;
             }
 
@@ -895,43 +1514,26 @@
                 return;
             }
 
-            // Dictionary button
-            if (pos.x >= CONFIG.WIDTH - 55 && pos.x <= CONFIG.WIDTH - 10 &&
-                pos.y >= CONFIG.HEIGHT - 30 && pos.y <= CONFIG.HEIGHT - 5) {
-                showDictionary = true;
-                return;
-            }
-
             if (gameState === 'WORD_BUILDING') {
-                // Pool letters
-                for (let i = 0; i < letters.length; i++) {
-                    if (letters[i].selected) continue;
-                    const letter = letters[i];
-                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + CONFIG.LETTER_SIZE &&
-                        pos.y >= letter.currentY && pos.y <= letter.currentY + CONFIG.LETTER_SIZE) {
-                        selectLetter(i);
-                        return;
-                    }
-                }
-
-                // Word area letters
+                // Word area letters - use WORD_LETTER_SIZE for hit detection
                 for (let orderIndex = selectedOrder.length - 1; orderIndex >= 0; orderIndex--) {
                     const letterIndex = selectedOrder[orderIndex];
                     const letter = letters[letterIndex];
-                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + CONFIG.LETTER_SIZE &&
-                        pos.y >= letter.currentY && pos.y <= letter.currentY + CONFIG.LETTER_SIZE) {
+                    const wordSize = CONFIG.WORD_LETTER_SIZE;
+                    if (pos.x >= letter.currentX && pos.x <= letter.currentX + wordSize &&
+                        pos.y >= letter.currentY && pos.y <= letter.currentY + wordSize) {
                         deselectLetter(letterIndex);
                         return;
                     }
                 }
 
-                // Submit button
+                // Submit button - larger hit area
                 const word = getSelectedWord();
                 if (isValidWord(word)) {
-                    const btnWidth = 80;
-                    const btnHeight = 24;
+                    const btnWidth = 160;
+                    const btnHeight = 50;
                     const btnX = (CONFIG.WIDTH - btnWidth) / 2;
-                    const btnY = CONFIG.WORD_Y + CONFIG.LETTER_SIZE + 5;
+                    const btnY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 18;
 
                     if (pos.x >= btnX && pos.x <= btnX + btnWidth &&
                         pos.y >= btnY && pos.y <= btnY + btnHeight) {
@@ -949,14 +1551,50 @@
         }
 
         function handlePointerMove(event) {
+            const pos = getCanvasCoords(event);
+
+            if (showDictionary && dictDragStart !== null) {
+                if (dictScrollbarDrag) {
+                    // Dragging scrollbar thumb directly
+                    const sb = renderDictionaryPopup.scrollbar;
+                    if (sb) {
+                        const deltaY = pos.y - dictDragStart;
+                        const scrollRatio = deltaY / (sb.height - sb.thumbHeight);
+                        dictScrollY = dictDragScrollStart + scrollRatio * sb.maxScroll;
+                    }
+                } else {
+                    // Drag scroll in list area (inverted)
+                    const deltaY = dictDragStart - pos.y;
+                    const rowHeight = 52; // Match dictionary row height
+                    dictScrollY = dictDragScrollStart + deltaY / rowHeight;
+                }
+            }
+
             if (gameState === 'FLING' && isFlingReady) {
-                flingCurrent = getCanvasCoords(event);
+                flingCurrent = pos;
             }
         }
 
         function handlePointerEnd(event) {
+            const pos = getCanvasCoords(event);
+
+            if (showDictionary) {
+                const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80;
+
+                // Tap within dictionary area (not scrollbar drag) closes it
+                if (dictDragStart !== null && !dictScrollbarDrag && pos.y >= dictStartY) {
+                    const deltaY = Math.abs(dictDragStart - pos.y);
+                    if (deltaY < 10) {
+                        showDictionary = false;
+                    }
+                }
+                dictDragStart = null;
+                dictScrollbarDrag = false;
+                return;
+            }
+
             if (gameState === 'FLING' && isFlingReady && flingStart) {
-                performFling(getCanvasCoords(event));
+                performFling(pos);
                 flingStart = null;
                 flingCurrent = null;
                 isFlingReady = false;
@@ -967,21 +1605,31 @@
             const word = getSelectedWord();
             if (!isValidWord(word)) return;
 
+            // Close dictionary if open
+            showDictionary = false;
+
             const activePiles = trashPiles.map((p, i) => ({ pile: p, index: i })).filter(p => p.pile.active);
             if (activePiles.length === 0) {
                 gameState = 'VICTORY';
                 return;
             }
 
-            const chosen = activePiles[Math.floor(Math.random() * activePiles.length)];
-            activePileIndex = chosen.index;
+            // Use the pending pile that was already shown in preview, or fall back to random
+            let chosenIndex = pendingPileIndex;
+            if (chosenIndex === -1 || !trashPiles[chosenIndex]?.active) {
+                const hash = word.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                chosenIndex = activePiles[hash % activePiles.length].index;
+            }
+
+            activePileIndex = chosenIndex;
+            const chosenPile = trashPiles[chosenIndex];
 
             currentObject = {
                 word: word,
                 weight: DICTIONARY[word].weight,
-                x: chosen.pile.x,
+                x: chosenPile.x,
                 y: 2,
-                z: chosen.pile.z,
+                z: chosenPile.z,
                 vx: 0,
                 vy: 0,
                 vz: 0,
@@ -993,8 +1641,8 @@
             objectMesh.position.set(currentObject.x, currentObject.y, currentObject.z);
 
             // Highlight pile
-            if (chosen.pile.mesh) {
-                chosen.pile.mesh.children.forEach(child => {
+            if (chosenPile.mesh) {
+                chosenPile.mesh.children.forEach(child => {
                     if (child.material) {
                         child.userData.originalColor = child.material.color.getHex();
                         child.material.emissive = new THREE.Color(0x444400);
@@ -1012,6 +1660,7 @@
 
             showMessage(`Found: ${word}!`);
             gameState = 'OBJECT_SPAWN';
+            pendingPileIndex = -1; // Reset pending pile
 
             setTimeout(() => {
                 if (gameState === 'OBJECT_SPAWN') {
@@ -1026,22 +1675,31 @@
             const pullX = endPos.x - flingStart.x;
             const pullY = endPos.y - flingStart.y;
 
-            const power = Math.sqrt(pullX * pullX + pullY * pullY);
-            if (power < 20) return;
+            // Only accept downward pulls (forward throws)
+            if (pullY <= 0) return;
 
-            const weightFactor = 1 / (0.5 + currentObject.weight * 0.05);
-            const normalizedPower = Math.min(power, 150) / 150;
+            const rawPull = Math.sqrt(pullX * pullX + pullY * pullY);
+
+            // Non-linear power: sqrt curve for easier precision at low power
+            const maxRawPull = 200;
+            const clampedPull = Math.min(rawPull, maxRawPull);
+            const normalizedPower = Math.sqrt(clampedPull / maxRawPull); // 0 to 1
+
+            // Linear weight: weight 8 travels 1/8 as far as weight 1
+            const weightFactor = 1 / currentObject.weight;
 
             const directionMultiplier = (cameraMode === 'DUMPYARD') ? 1 : -1;
 
-            // Forward velocity - tuned to work with position clamping
-            currentObject.vz = normalizedPower * 0.4 * weightFactor * directionMultiplier;
+            // Velocities tuned so weight 8 at 100% power can reach lake from back of dumpyard
+            // Back of dumpyard: z ≈ 5, lake starts at z = 80 (LAKE_Z - LAKE_WIDTH/2 = 100 - 20)
+            // Need ~75 units of travel for weight 8 at 100% power
+            currentObject.vz = normalizedPower * 6.5 * weightFactor * directionMultiplier;
 
-            // Lateral velocity - very small
-            currentObject.vx = -pullX * 0.0008 * weightFactor;
+            // Lateral velocity
+            currentObject.vx = -pullX * 0.003 * weightFactor;
 
-            // Vertical velocity - high for dramatic arc (3-4 second flight)
-            currentObject.vy = 0.2 + normalizedPower * 0.25 * weightFactor;
+            // Vertical velocity for nice arc
+            currentObject.vy = 0.06 + normalizedPower * 0.7 * weightFactor;
 
             // Spin
             currentObject.rotationSpeed = (Math.random() - 0.5) * 0.08 + pullX * 0.0003;
@@ -1054,15 +1712,74 @@
         // ============================================
         // GAME LOGIC
         // ============================================
+        let lastUpdateTime = 0;
+
         function update() {
-            // Letter animations
+            const now = performance.now();
+            const deltaTime = lastUpdateTime ? now - lastUpdateTime : 16;
+            lastUpdateTime = now;
+
+            // Dialog animation
+            if (dialogActive && dialogLines.length > 0) {
+                if (currentDialogLine < dialogLines.length) {
+                    const currentLine = dialogLines[currentDialogLine];
+
+                    if (currentDialogChar < currentLine.length) {
+                        // Reveal characters
+                        dialogCharTimer += deltaTime;
+                        if (dialogCharTimer >= DIALOG_CHAR_SPEED) {
+                            dialogCharTimer = 0;
+                            currentDialogChar++;
+                        }
+                    } else {
+                        // Line complete, wait then advance
+                        dialogPauseTimer += deltaTime;
+                        if (dialogPauseTimer >= DIALOG_PAUSE_TIME) {
+                            dialogPauseTimer = 0;
+                            currentDialogChar = 0;
+                            currentDialogLine++;
+
+                            // Check if dialog is done
+                            if (currentDialogLine >= dialogLines.length) {
+                                dialogActive = false;
+                                // Start letter reveal animation after intro dialog
+                                if (gameState === 'INTRO') {
+                                    startLetterReveal();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Letter reveal animation (80ms between each letter)
+            if (letterAnimationQueue.length > 0) {
+                letterAnimationTimer += deltaTime;
+                if (letterAnimationTimer >= 80) {
+                    letterAnimationTimer = 0;
+                    const letterIndex = letterAnimationQueue.shift();
+                    letters[letterIndex].revealed = true;
+
+                    // If all letters revealed, start game
+                    if (letterAnimationQueue.length === 0) {
+                        gameState = 'WORD_BUILDING';
+                    }
+                }
+            }
+
+            // Letter animations (position and size)
             for (let i = 0; i < letters.length; i++) {
                 const letter = letters[i];
+                if (!letter.revealed) continue;
+
                 let targetX = letter.selected ? letter.wordX : letter.poolX;
                 let targetY = letter.selected ? letter.wordY : letter.poolY;
+                let targetSize = letter.selected ? CONFIG.WORD_LETTER_SIZE : CONFIG.LETTER_SIZE;
 
                 letter.currentX += (targetX - letter.currentX) * CONFIG.ANIM_SPEED;
                 letter.currentY += (targetY - letter.currentY) * CONFIG.ANIM_SPEED;
+                letter.currentSize = letter.currentSize || 5;
+                letter.currentSize += (targetSize - letter.currentSize) * CONFIG.ANIM_SPEED;
             }
 
             // Message timer
@@ -1267,12 +1984,34 @@
             requestAnimationFrame(gameLoop);
         }
 
+        function startIntroDialog() {
+            dialogActive = true;
+            dialogLines = [
+                "Hey, Newbie!",
+                "We have a big problem!",
+                "This dumpyard is full, and there's more trash coming!",
+                "Thankfully, we've got a perfectly fine lake over there...",
+                "You know what to do."
+            ];
+            currentDialogLine = 0;
+            currentDialogChar = 0;
+            dialogCharTimer = 0;
+            dialogPauseTimer = 0;
+        }
+
+        function startLetterReveal() {
+            // Letters are already in queue from generateLetterPool
+            letterAnimationTimer = 0;
+            gameState = 'LETTER_REVEAL';
+        }
+
         function resetGame() {
             score = 0;
             pilesCleared = 0;
             shotsTaken = 0;
             currentObject = null;
             activePileIndex = -1;
+            pendingPileIndex = -1;
             showDictionary = false;
             cameraMode = 'DUMPYARD';
 
@@ -1292,7 +2031,10 @@
 
             createTrashPiles();
             generateLetterPool();
-            gameState = 'WORD_BUILDING';
+
+            // Start intro dialog
+            gameState = 'INTRO';
+            startIntroDialog();
         }
 
         function init() {
