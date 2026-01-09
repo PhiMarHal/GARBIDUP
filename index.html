@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Dumpyard Fling</title>
+    <title>GARBIDUP</title>
     <style>
         * {
             margin: 0;
@@ -74,6 +74,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@farcade/game-sdk@latest/dist/index.min.js"></script>
     <script>
         // Polyfill for roundRect if not available
         if (!CanvasRenderingContext2D.prototype.roundRect) {
@@ -223,6 +224,54 @@
         let dialogPauseTimer = 0;
         const DIALOG_CHAR_SPEED = 30; // ms per character
         const DIALOG_PAUSE_TIME = 1000; // ms pause after line complete
+
+        // Audio state (for future sound implementation)
+        let isMuted = false;
+
+        // Player name (from Remix SDK or default)
+        let playerName = 'Newbie';
+
+        // ============================================
+        // REMIX SDK INTEGRATION
+        // ============================================
+        function isInRemix() {
+            return window.FarcadeSDK && window.self !== window.top;
+        }
+
+        async function initRemixSDK() {
+            if (!window.FarcadeSDK) return;
+
+            try {
+                // Signal ready and get game info (including player data)
+                const gameInfo = await window.FarcadeSDK.singlePlayer.actions.ready();
+
+                // Extract player name if available
+                if (gameInfo && gameInfo.players && gameInfo.players.length > 0) {
+                    const player = gameInfo.players[0];
+                    if (player.name) {
+                        playerName = player.name;
+                    }
+                }
+            } catch (e) {
+                // If ready() fails, just continue with default name
+            }
+
+            // Handle play again requests from Remix
+            window.FarcadeSDK.on('play_again', () => {
+                resetGame();
+            });
+
+            // Handle mute/unmute requests from Remix
+            window.FarcadeSDK.on('toggle_mute', (data) => {
+                isMuted = data.isMuted;
+                // Future: apply mute to audio elements here
+            });
+        }
+
+        function signalGameOver(finalScore) {
+            if (!window.FarcadeSDK) return;
+            window.FarcadeSDK.singlePlayer.actions.gameOver({ score: finalScore });
+        }
 
         // Fling
         let flingStart = null;
@@ -1383,6 +1432,9 @@
         }
 
         function renderVictoryScreen() {
+            // Skip rendering if in Remix (Remix handles its own game over UI)
+            if (isInRemix()) return;
+
             uiCtx.fillStyle = 'rgba(0, 0, 0, 0.85)';
             uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
@@ -1390,7 +1442,7 @@
             uiCtx.font = 'bold 32px Arial';
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'middle';
-            uiCtx.fillText('DUMPYARD', CONFIG.WIDTH / 2, 180);
+            uiCtx.fillText('GARBIDUP', CONFIG.WIDTH / 2, 180);
             uiCtx.fillText('CLEARED!', CONFIG.WIDTH / 2, 220);
 
             uiCtx.fillStyle = '#FFF';
@@ -1644,6 +1696,7 @@
             const activePiles = trashPiles.map((p, i) => ({ pile: p, index: i })).filter(p => p.pile.active);
             if (activePiles.length === 0) {
                 gameState = 'VICTORY';
+                signalGameOver(score);
                 return;
             }
 
@@ -1966,6 +2019,7 @@
                 activePileIndex = -1;
                 setTimeout(() => {
                     gameState = 'VICTORY';
+                    signalGameOver(score);
                 }, 1500);
                 return;
             }
@@ -2036,7 +2090,7 @@
         function startIntroDialog() {
             dialogActive = true;
             dialogLines = [
-                "Hey, Newbie!",
+                `Hey, ${playerName}!`,
                 "We have a big problem!",
                 "This dumpyard is full, and there's more trash coming!",
                 "Thankfully, we've got a perfectly fine lake over there...",
@@ -2090,6 +2144,7 @@
             initThree();
             initUI();
             initInput();
+            initRemixSDK();
             handleResize(); // Initial sizing
             resetGame();
             gameLoop();
