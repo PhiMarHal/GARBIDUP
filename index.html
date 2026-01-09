@@ -858,12 +858,15 @@
 
             // Message
             if (messageTimer > 0) {
+                const msgPadding = Math.floor(CONFIG.WIDTH * 0.125);
+                const msgHeight = Math.floor(CONFIG.HEIGHT * 0.1);
+                const msgFontSize = Math.max(14, Math.floor(CONFIG.WIDTH * 0.055));
                 uiCtx.fillStyle = 'rgba(0,0,0,0.7)';
-                uiCtx.fillRect(50, CONFIG.HEIGHT / 2 - 30, CONFIG.WIDTH - 100, 60);
+                uiCtx.fillRect(msgPadding, CONFIG.HEIGHT / 2 - msgHeight / 2, CONFIG.WIDTH - msgPadding * 2, msgHeight);
                 uiCtx.fillStyle = '#FFF';
-                uiCtx.font = 'bold 22px Arial';
+                uiCtx.font = `bold ${msgFontSize}px Arial`;
                 uiCtx.textAlign = 'center';
-                uiCtx.fillText(message, CONFIG.WIDTH / 2, CONFIG.HEIGHT / 2 + 8);
+                uiCtx.fillText(message, CONFIG.WIDTH / 2, CONFIG.HEIGHT / 2 + msgFontSize * 0.35);
             }
 
             // Fling indicator
@@ -881,18 +884,21 @@
         }
 
         function renderTopScore() {
-            const topY = 32; // More space from top
+            // Proportional positioning
+            const topY = Math.floor(CONFIG.HEIGHT * 0.053);
+            const scoreFontSize = Math.max(20, Math.floor(CONFIG.WIDTH * 0.105));
+            const scoreX = Math.floor(CONFIG.WIDTH * 0.03);
 
-            // Score on left with wave animation on digits - bigger and thicker
+            // Score on left with wave animation on digits
             const scoreStr = score.toString();
-            uiCtx.font = 'bold 42px Arial';
+            uiCtx.font = `bold ${scoreFontSize}px Arial`;
             uiCtx.textAlign = 'left';
             uiCtx.textBaseline = 'middle';
 
-            let xPos = 12;
+            let xPos = scoreX;
             for (let i = 0; i < scoreStr.length; i++) {
                 const digit = scoreStr[i];
-                const waveOffset = Math.sin(animTime * 0.5 + i * 1.2) * 3; // Slower wave
+                const waveOffset = Math.sin(animTime * 0.5 + i * 1.2) * 3;
 
                 // Thicker shadow/outline effect
                 uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -906,11 +912,13 @@
                 xPos += uiCtx.measureText(digit).width + 2;
             }
 
-            // Dictionary button on right
-            const btnWidth = 130;
-            const btnHeight = 40;
-            const btnX = CONFIG.WIDTH - btnWidth - 10;
-            const btnY = 12;
+            // Dictionary button on right - proportional to screen width
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.325);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
+            const btnX = CONFIG.WIDTH - btnWidth - Math.floor(CONFIG.WIDTH * 0.025);
+            const btnY = Math.floor(CONFIG.HEIGHT * 0.02);
+            const cornerRadius = Math.floor(btnHeight * 0.2);
+            const btnFontSize = Math.max(12, Math.floor(btnHeight * 0.45));
 
             if (showDictionary) {
                 // Glowing effect when dictionary is open
@@ -921,19 +929,19 @@
                 // Shadow
                 uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 // Active state - brighter blue
                 uiCtx.fillStyle = '#4a90d9';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.strokeStyle = '#6ab0f9';
                 uiCtx.lineWidth = 2;
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.stroke();
 
                 // Reset shadow
@@ -943,23 +951,23 @@
                 // Normal state
                 uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.fillStyle = '#555';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.strokeStyle = '#888';
                 uiCtx.lineWidth = 2;
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 8);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.stroke();
             }
 
             uiCtx.fillStyle = '#FFF';
-            uiCtx.font = 'bold 18px Arial';
+            uiCtx.font = `bold ${btnFontSize}px Arial`;
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'middle';
             uiCtx.fillText('DICTIONARY', btnX + btnWidth / 2, btnY + btnHeight / 2);
@@ -1039,24 +1047,28 @@
             }
 
             if (isValid && gameState === 'WORD_BUILDING') {
+                // Button size proportional to screen width
+                const baseBtnWidth = Math.floor(CONFIG.WIDTH * 0.4); // 40% of width
+                const baseBtnHeight = Math.floor(baseBtnWidth * 0.3125); // Maintain aspect ratio
+                const btnGap = Math.floor(CONFIG.HEIGHT * 0.03); // Gap below word letters
+                const cornerRadius = Math.floor(baseBtnHeight * 0.2);
+
                 // Pulsing animation - slower (half speed)
                 const pulseScale = 1 + Math.sin(animTime * 2) * 0.03;
-                const baseBtnWidth = 160;
-                const baseBtnHeight = 50;
                 const btnWidth = baseBtnWidth * pulseScale;
                 const btnHeight = baseBtnHeight * pulseScale;
                 const btnX = (CONFIG.WIDTH - btnWidth) / 2;
-                const btnY = CONFIG.WORD_Y + size + 18 - (btnHeight - baseBtnHeight) / 2;
+                const btnY = CONFIG.WORD_Y + size + btnGap - (btnHeight - baseBtnHeight) / 2;
 
                 // Glow effect - subtler
                 const glowIntensity = 0.2 + Math.sin(animTime * 2) * 0.1;
                 uiCtx.shadowColor = `rgba(76, 175, 80, ${glowIntensity})`;
-                uiCtx.shadowBlur = 12 + Math.sin(animTime * 2) * 4;
+                uiCtx.shadowBlur = Math.floor(baseBtnHeight * 0.24) + Math.sin(animTime * 2) * 4;
 
                 // Button shadow
                 uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 3, btnY + 3, btnWidth, btnHeight, 10);
+                uiCtx.roundRect(btnX + 3, btnY + 3, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 // Button gradient
@@ -1066,7 +1078,7 @@
                 gradient.addColorStop(1, '#3D8B40');
                 uiCtx.fillStyle = gradient;
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 10);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 // Reset shadow
@@ -1075,20 +1087,20 @@
 
                 // Border
                 uiCtx.strokeStyle = '#2d7a2d';
-                uiCtx.lineWidth = 3;
+                uiCtx.lineWidth = Math.max(2, Math.floor(baseBtnHeight * 0.06));
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, 10);
+                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.stroke();
 
                 // Highlight
                 uiCtx.fillStyle = 'rgba(255,255,255,0.2)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 4, btnY + 4, btnWidth - 8, btnHeight / 2 - 4, 6);
+                uiCtx.roundRect(btnX + 4, btnY + 4, btnWidth - 8, btnHeight / 2 - 4, Math.max(2, cornerRadius - 4));
                 uiCtx.fill();
 
-                // Text - scales with button
-                const baseFontSize = 22;
-                const fontSize = baseFontSize * pulseScale;
+                // Text - proportional to button
+                const baseFontSize = Math.floor(baseBtnHeight * 0.44);
+                const fontSize = Math.floor(baseFontSize * pulseScale);
                 uiCtx.font = `bold ${fontSize}px Arial`;
                 uiCtx.textAlign = 'center';
                 uiCtx.textBaseline = 'middle';
@@ -1108,24 +1120,29 @@
 
             const pilesCleared = CONFIG.PILE_COUNT - trashPiles.filter(p => p.active).length;
 
-            // Progress squares - bigger, no wave animation
-            const squareSize = 22;
-            const squareGap = 4;
+            // Calculate square size to fit available width (like letters do)
+            const margin = 40; // 20px on each side
+            const availableWidth = CONFIG.WIDTH - margin;
+            const squareGap = Math.max(2, Math.floor(CONFIG.WIDTH / 100)); // Scale gap with width
+            const squareSize = Math.floor((availableWidth - (CONFIG.PILE_COUNT - 1) * squareGap) / CONFIG.PILE_COUNT);
+
             const totalWidth = CONFIG.PILE_COUNT * squareSize + (CONFIG.PILE_COUNT - 1) * squareGap;
             const startX = (CONFIG.WIDTH - totalWidth) / 2;
-            const squareY = CONFIG.HEIGHT - 45;
+            const squareY = CONFIG.HEIGHT - squareSize - 20;
 
-            // "TIDINESS" label - left aligned above progress bar, 50% bigger
-            uiCtx.font = 'bold 21px Arial';
+            // Font size proportional to square size
+            const labelFontSize = Math.max(12, Math.floor(squareSize * 0.9));
+
+            // "TIDINESS" label - left aligned above progress bar
+            uiCtx.font = `bold ${labelFontSize}px Arial`;
             uiCtx.textAlign = 'left';
             uiCtx.textBaseline = 'middle';
             uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-            uiCtx.fillText('TIDINESS', startX + 1, squareY - 18 + 1);
+            uiCtx.fillText('TIDINESS', startX + 1, squareY - squareSize * 0.7 + 1);
             uiCtx.fillStyle = '#CCC';
-            uiCtx.fillText('TIDINESS', startX, squareY - 18);
+            uiCtx.fillText('TIDINESS', startX, squareY - squareSize * 0.7);
 
             // "WEIGHT X" label - right aligned at same level as TIDINESS
-            // Show when there's an active object OR when a valid word is formed
             let displayWeight = null;
             if (currentObject && currentObject.weight) {
                 displayWeight = currentObject.weight;
@@ -1139,14 +1156,16 @@
             if (displayWeight !== null) {
                 const endX = startX + totalWidth;
                 const weightText = 'WEIGHT ' + displayWeight;
-                uiCtx.font = 'bold 21px Arial';
+                uiCtx.font = `bold ${labelFontSize}px Arial`;
                 uiCtx.textAlign = 'right';
                 uiCtx.textBaseline = 'middle';
                 uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                uiCtx.fillText(weightText, endX + 1, squareY - 18 + 1);
+                uiCtx.fillText(weightText, endX + 1, squareY - squareSize * 0.7 + 1);
                 uiCtx.fillStyle = '#CCC';
-                uiCtx.fillText(weightText, endX, squareY - 18);
+                uiCtx.fillText(weightText, endX, squareY - squareSize * 0.7);
             }
+
+            const cornerRadius = Math.max(2, Math.floor(squareSize / 4));
 
             for (let i = 0; i < CONFIG.PILE_COUNT; i++) {
                 const x = startX + i * (squareSize + squareGap);
@@ -1155,84 +1174,88 @@
                 // Shadow
                 uiCtx.fillStyle = 'rgba(0,0,0,0.3)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(x + 2, squareY + 2, squareSize, squareSize, 5);
+                uiCtx.roundRect(x + 2, squareY + 2, squareSize, squareSize, cornerRadius);
                 uiCtx.fill();
 
                 if (isFilled) {
-                    // Filled - very subtle color cycling (softer)
-                    const hue = 120 + Math.sin(animTime * 0.5 + i * 0.15) * 10; // Slower, subtler
-                    const lightness = 50 + Math.sin(animTime * 0.7 + i * 0.2) * 5; // Softer brightness
+                    const hue = 120 + Math.sin(animTime * 0.5 + i * 0.15) * 10;
+                    const lightness = 50 + Math.sin(animTime * 0.7 + i * 0.2) * 5;
                     uiCtx.fillStyle = `hsl(${hue}, 60%, ${lightness}%)`;
                 } else {
-                    // Empty - dark gray
                     uiCtx.fillStyle = 'rgba(60, 60, 60, 0.8)';
                 }
 
                 uiCtx.beginPath();
-                uiCtx.roundRect(x, squareY, squareSize, squareSize, 5);
+                uiCtx.roundRect(x, squareY, squareSize, squareSize, cornerRadius);
                 uiCtx.fill();
 
-                // Highlight on filled squares
                 if (isFilled) {
                     uiCtx.fillStyle = 'rgba(255,255,255,0.2)';
                     uiCtx.beginPath();
-                    uiCtx.roundRect(x + 3, squareY + 3, squareSize - 6, squareSize / 2 - 2, 3);
+                    uiCtx.roundRect(x + 3, squareY + 3, squareSize - 6, squareSize / 2 - 2, Math.max(1, cornerRadius - 2));
                     uiCtx.fill();
                 }
             }
         }
 
         function renderDialogBox() {
-            const boxY = CONFIG.HEIGHT - 75;
-            const boxHeight = 70;
-            const boxX = 10;
-            const boxWidth = CONFIG.WIDTH - 20;
+            // Scale dialog box proportionally to screen size
+            const boxHeight = Math.floor(CONFIG.HEIGHT * 0.12); // 12% of height
+            const boxMargin = Math.floor(CONFIG.WIDTH * 0.025); // 2.5% margin
+            const boxY = CONFIG.HEIGHT - boxHeight - boxMargin;
+            const boxX = boxMargin;
+            const boxWidth = CONFIG.WIDTH - boxMargin * 2;
+            const cornerRadius = Math.floor(boxHeight * 0.14);
 
             // Box background
             uiCtx.fillStyle = 'rgba(20, 30, 40, 0.95)';
             uiCtx.beginPath();
-            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, 10);
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
             uiCtx.fill();
 
             // Box border
             uiCtx.strokeStyle = 'rgba(100, 140, 180, 0.6)';
             uiCtx.lineWidth = 2;
             uiCtx.beginPath();
-            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, 10);
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
             uiCtx.stroke();
 
-            // Profile picture placeholder (empty square)
-            const picSize = 50;
-            const picX = boxX + 10;
-            const picY = boxY + 10;
+            // Profile picture placeholder - proportional to box height
+            const picSize = Math.floor(boxHeight * 0.7);
+            const picMargin = Math.floor(boxHeight * 0.15);
+            const picX = boxX + picMargin;
+            const picY = boxY + picMargin;
 
             uiCtx.fillStyle = 'rgba(80, 100, 120, 0.8)';
             uiCtx.beginPath();
-            uiCtx.roundRect(picX, picY, picSize, picSize, 6);
+            uiCtx.roundRect(picX, picY, picSize, picSize, Math.floor(picSize * 0.12));
             uiCtx.fill();
 
             uiCtx.strokeStyle = 'rgba(120, 150, 180, 0.8)';
             uiCtx.lineWidth = 2;
             uiCtx.beginPath();
-            uiCtx.roundRect(picX, picY, picSize, picSize, 6);
+            uiCtx.roundRect(picX, picY, picSize, picSize, Math.floor(picSize * 0.12));
             uiCtx.stroke();
 
-            // "BOSS" title
-            uiCtx.font = 'bold 14px Arial';
+            // "BOSS" title - font size proportional to box
+            const titleFontSize = Math.max(10, Math.floor(boxHeight * 0.2));
+            const textX = picX + picSize + picMargin;
+            uiCtx.font = `bold ${titleFontSize}px Arial`;
             uiCtx.textAlign = 'left';
             uiCtx.textBaseline = 'top';
             uiCtx.fillStyle = '#FFD700';
-            uiCtx.fillText('BOSS', picX + picSize + 12, picY + 2);
+            uiCtx.fillText('BOSS', textX, picY + 2);
 
             // Dialog text (character by character)
             if (dialogLines.length > 0 && currentDialogLine < dialogLines.length) {
                 const fullLine = dialogLines[currentDialogLine];
                 const displayText = fullLine.substring(0, currentDialogChar);
 
-                uiCtx.font = '16px Arial';
+                const dialogFontSize = Math.max(12, Math.floor(boxHeight * 0.22));
+                uiCtx.font = `${dialogFontSize}px Arial`;
                 uiCtx.fillStyle = '#FFF';
                 uiCtx.textBaseline = 'top';
-                uiCtx.fillText(displayText, picX + picSize + 12, picY + 22);
+                uiCtx.fillText(displayText, textX, picY + titleFontSize + 6);
             }
         }
 
@@ -1247,13 +1270,18 @@
             }
 
             // Linear power scaling for precise control at low power
-            // Max raw pull is 250 pixels, maps to 100%
-            const maxRawPull = 250;
+            // Max raw pull proportional to screen height
+            const maxRawPull = CONFIG.HEIGHT * 0.4;
             const power = Math.min(100, Math.max(1, Math.round(100 * rawPull / maxRawPull)));
+
+            // Scale visual elements proportionally
+            const lineWidth = Math.max(1, Math.floor(CONFIG.WIDTH * 0.005));
+            const arrowSize = Math.floor(CONFIG.WIDTH * 0.03);
+            const fontSize = Math.max(12, Math.floor(CONFIG.WIDTH * 0.04));
 
             // Pull line (where finger dragged)
             uiCtx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
-            uiCtx.lineWidth = 2;
+            uiCtx.lineWidth = lineWidth;
             uiCtx.setLineDash([5, 5]);
             uiCtx.beginPath();
             uiCtx.moveTo(flingStart.x, flingStart.y);
@@ -1262,12 +1290,12 @@
             uiCtx.setLineDash([]);
 
             // Throw direction indicator - always points UP (forward into screen)
-            const throwLength = Math.max(8, power * 0.8);
+            const throwLength = Math.max(arrowSize * 0.5, power * arrowSize * 0.05);
             const throwEndX = flingStart.x;
             const throwEndY = flingStart.y - throwLength;
 
             uiCtx.strokeStyle = `rgba(255, 80, 80, ${0.5 + power / 200})`;
-            uiCtx.lineWidth = 4 + power / 25;
+            uiCtx.lineWidth = lineWidth * 2 + power / 25;
             uiCtx.lineCap = 'round';
 
             uiCtx.beginPath();
@@ -1278,58 +1306,71 @@
             // Arrowhead pointing up
             uiCtx.beginPath();
             uiCtx.moveTo(throwEndX, throwEndY);
-            uiCtx.lineTo(throwEndX - 12, throwEndY + 15);
+            uiCtx.lineTo(throwEndX - arrowSize, throwEndY + arrowSize * 1.25);
             uiCtx.moveTo(throwEndX, throwEndY);
-            uiCtx.lineTo(throwEndX + 12, throwEndY + 15);
+            uiCtx.lineTo(throwEndX + arrowSize, throwEndY + arrowSize * 1.25);
             uiCtx.stroke();
 
             // Power indicator
-            uiCtx.font = 'bold 16px Arial';
+            uiCtx.font = `bold ${fontSize}px Arial`;
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'bottom';
             uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x + 1, throwEndY - 9);
+            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x + 1, throwEndY - fontSize * 0.5);
             uiCtx.fillStyle = '#FFF';
-            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x, throwEndY - 10);
+            uiCtx.fillText(`${Math.round(power)}%`, flingStart.x, throwEndY - fontSize * 0.5 - 1);
         }
 
         function renderDictionaryPopup() {
-            // Dictionary starts below word letters but leaves room for THROW IT button
-            const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80; // Leave room for button
+            // Calculate button gap to know where dictionary starts
+            const btnGap = Math.floor(CONFIG.HEIGHT * 0.03);
+            const baseBtnHeight = Math.floor(CONFIG.WIDTH * 0.4 * 0.3125);
 
-            // Smaller dictionary window - show 8 words
-            const rowHeight = 52;
+            // Dictionary starts below word letters and THROW IT button
+            const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + btnGap + baseBtnHeight + Math.floor(CONFIG.HEIGHT * 0.02);
+
+            // Calculate available height for dictionary
+            // Leave space for bottom UI (tidiness bar)
+            const bottomMargin = Math.floor(CONFIG.HEIGHT * 0.12); // Reserve 12% for bottom UI
+            const availableHeight = CONFIG.HEIGHT - dictStartY - bottomMargin;
+
+            // Row height proportional to available space, aim for ~8 visible rows
             const targetVisibleRows = 8;
-            const dictHeight = Math.min(rowHeight * targetVisibleRows + 20, CONFIG.HEIGHT - dictStartY - 85);
+            const rowHeight = Math.floor(availableHeight / targetVisibleRows);
+            const dictHeight = availableHeight;
+
+            const margin = Math.floor(CONFIG.WIDTH * 0.0125); // Small margin
+            const cornerRadius = Math.floor(CONFIG.WIDTH * 0.03);
 
             // Lighter background
             uiCtx.fillStyle = 'rgba(30, 40, 50, 0.95)';
             uiCtx.beginPath();
-            uiCtx.roundRect(5, dictStartY, CONFIG.WIDTH - 10, dictHeight, 12);
+            uiCtx.roundRect(margin, dictStartY, CONFIG.WIDTH - margin * 2, dictHeight, cornerRadius);
             uiCtx.fill();
 
             // Border
             uiCtx.strokeStyle = 'rgba(100, 120, 140, 0.5)';
             uiCtx.lineWidth = 2;
             uiCtx.beginPath();
-            uiCtx.roundRect(5, dictStartY, CONFIG.WIDTH - 10, dictHeight, 12);
+            uiCtx.roundRect(margin, dictStartY, CONFIG.WIDTH - margin * 2, dictHeight, cornerRadius);
             uiCtx.stroke();
 
-            // Build word list: pre-selected words first (these are the 16 for this game), then rest
+            // Build word list: pre-selected words first, then rest
             const preSelectedSorted = preSelectedWords.slice().sort((a, b) => a.localeCompare(b));
             const otherWords = WORD_LIST.filter(w => !preSelectedWords.includes(w)).sort((a, b) => a.localeCompare(b));
             const allWords = [...preSelectedSorted, ...otherWords];
 
-            const startY = dictStartY + 10;
-            const listHeight = dictHeight - 20;
+            const padding = Math.floor(CONFIG.WIDTH * 0.025);
+            const startY = dictStartY + padding;
+            const listHeight = dictHeight - padding * 2;
             const visibleRows = Math.floor(listHeight / rowHeight);
             const maxScroll = Math.max(0, allWords.length - visibleRows);
 
-            // Scrollbar dimensions
-            const scrollbarWidth = 24;
-            const scrollbarX = CONFIG.WIDTH - scrollbarWidth - 15;
-            const trackY = startY + 5;
-            const trackHeight = listHeight - 10;
+            // Scrollbar dimensions - proportional
+            const scrollbarWidth = Math.floor(CONFIG.WIDTH * 0.06);
+            const scrollbarX = CONFIG.WIDTH - scrollbarWidth - margin - padding;
+            const trackY = startY + padding;
+            const trackHeight = listHeight - padding * 2;
 
             // Clamp scroll
             dictScrollY = Math.max(0, Math.min(dictScrollY, maxScroll));
@@ -1338,8 +1379,15 @@
             const endIndex = Math.min(startIndex + visibleRows + 1, allWords.length);
 
             // List area
-            const listX = 15;
-            const listWidth = CONFIG.WIDTH - scrollbarWidth - 40;
+            const listX = margin + padding;
+            const listWidth = CONFIG.WIDTH - scrollbarWidth - margin * 2 - padding * 3;
+
+            // Font size proportional to row height
+            const wordFontSize = Math.max(12, Math.floor(rowHeight * 0.5));
+
+            // Weight box size proportional to row height
+            const boxSize = Math.max(8, Math.floor(rowHeight * 0.27));
+            const boxGap = Math.max(2, Math.floor(boxSize * 0.3));
 
             uiCtx.save();
             uiCtx.beginPath();
@@ -1353,7 +1401,6 @@
 
                 // Row background
                 if (isPreSelected) {
-                    // Green background for pre-selected words (the 16 for this game)
                     uiCtx.fillStyle = 'rgba(60, 140, 60, 0.3)';
                     uiCtx.fillRect(listX, y, listWidth, rowHeight - 2);
                 } else if (i % 2 === 0) {
@@ -1363,17 +1410,15 @@
 
                 // Word name - left aligned
                 const hue = 40 + word.length * 20;
-                uiCtx.font = 'bold 26px Arial';
+                uiCtx.font = `bold ${wordFontSize}px Arial`;
                 uiCtx.fillStyle = isPreSelected ? '#8f8' : `hsl(${hue}, 70%, 70%)`;
                 uiCtx.textAlign = 'left';
                 uiCtx.textBaseline = 'middle';
-                uiCtx.fillText(word, listX + 10, y + rowHeight / 2);
+                uiCtx.fillText(word, listX + padding, y + rowHeight / 2);
 
                 // Weight boxes
                 const weight = DICTIONARY[word].weight;
-                const weightX = listX + listWidth - 8;
-                const boxSize = 14;
-                const boxGap = 4;
+                const weightX = listX + listWidth - padding;
 
                 for (let w = 0; w < 8; w++) {
                     const bx = weightX - (8 - w) * (boxSize + boxGap);
@@ -1387,7 +1432,7 @@
                     }
 
                     uiCtx.beginPath();
-                    uiCtx.roundRect(bx, by, boxSize, boxSize, 3);
+                    uiCtx.roundRect(bx, by, boxSize, boxSize, Math.max(1, Math.floor(boxSize * 0.2)));
                     uiCtx.fill();
                 }
             }
@@ -1402,7 +1447,7 @@
 
             // Scrollbar thumb
             if (allWords.length > visibleRows) {
-                const thumbHeight = Math.max(50, (visibleRows / allWords.length) * trackHeight);
+                const thumbHeight = Math.max(Math.floor(CONFIG.HEIGHT * 0.08), (visibleRows / allWords.length) * trackHeight);
                 const thumbY = trackY + (dictScrollY / maxScroll) * (trackHeight - thumbHeight);
 
                 const gradient = uiCtx.createLinearGradient(scrollbarX, 0, scrollbarX + scrollbarWidth, 0);
@@ -1438,26 +1483,32 @@
             uiCtx.fillStyle = 'rgba(0, 0, 0, 0.85)';
             uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
+            // Font sizes proportional to screen
+            const titleFontSize = Math.floor(CONFIG.WIDTH * 0.08);
+            const scoreFontSize = Math.floor(CONFIG.WIDTH * 0.07);
+            const labelFontSize = Math.floor(CONFIG.WIDTH * 0.035);
+            const infoFontSize = Math.floor(CONFIG.WIDTH * 0.045);
+
             uiCtx.fillStyle = '#FFD700';
-            uiCtx.font = 'bold 32px Arial';
+            uiCtx.font = `bold ${titleFontSize}px Arial`;
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'middle';
-            uiCtx.fillText('GARBIDUP', CONFIG.WIDTH / 2, 180);
-            uiCtx.fillText('CLEARED!', CONFIG.WIDTH / 2, 220);
+            uiCtx.fillText('GARBIDUP', CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.3);
+            uiCtx.fillText('CLEARED!', CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.3 + titleFontSize * 1.2);
 
             uiCtx.fillStyle = '#FFF';
-            uiCtx.font = '28px Arial';
-            uiCtx.fillText(score.toString(), CONFIG.WIDTH / 2, 300);
-            uiCtx.font = '14px Arial';
+            uiCtx.font = `${scoreFontSize}px Arial`;
+            uiCtx.fillText(score.toString(), CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.5);
+            uiCtx.font = `${labelFontSize}px Arial`;
             uiCtx.fillStyle = '#AAA';
-            uiCtx.fillText('FINAL SCORE', CONFIG.WIDTH / 2, 330);
+            uiCtx.fillText('FINAL SCORE', CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.5 + scoreFontSize);
 
             uiCtx.fillStyle = '#FFF';
-            uiCtx.font = '18px Arial';
-            uiCtx.fillText(`Objects Flung: ${pilesCleared}`, CONFIG.WIDTH / 2, 380);
+            uiCtx.font = `${infoFontSize}px Arial`;
+            uiCtx.fillText(`Objects Flung: ${pilesCleared}`, CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.65);
 
             uiCtx.fillStyle = '#4CAF50';
-            uiCtx.fillText('Tap to play again', CONFIG.WIDTH / 2, 450);
+            uiCtx.fillText('Tap to play again', CONFIG.WIDTH / 2, CONFIG.HEIGHT * 0.75);
         }
 
         // ============================================
@@ -1537,11 +1588,11 @@
                 return;
             }
 
-            // Dictionary button - top right (130x40) - always check this first (but not during intro)
-            const dictBtnWidth = 130;
-            const dictBtnHeight = 40;
-            const dictBtnX = CONFIG.WIDTH - dictBtnWidth - 10;
-            const dictBtnY = 12;
+            // Dictionary button - top right - proportional to screen
+            const dictBtnWidth = Math.floor(CONFIG.WIDTH * 0.325);
+            const dictBtnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
+            const dictBtnX = CONFIG.WIDTH - dictBtnWidth - Math.floor(CONFIG.WIDTH * 0.025);
+            const dictBtnY = Math.floor(CONFIG.HEIGHT * 0.02);
 
             if (pos.x >= dictBtnX && pos.x <= dictBtnX + dictBtnWidth &&
                 pos.y >= dictBtnY && pos.y <= dictBtnY + dictBtnHeight) {
@@ -1568,10 +1619,12 @@
             if (gameState === 'WORD_BUILDING') {
                 const word = getSelectedWord();
                 if (isValidWord(word)) {
-                    const btnWidth = 160;
-                    const btnHeight = 50;
+                    // Use same proportional calculation as rendering
+                    const btnWidth = Math.floor(CONFIG.WIDTH * 0.4);
+                    const btnHeight = Math.floor(btnWidth * 0.3125);
+                    const btnGap = Math.floor(CONFIG.HEIGHT * 0.03);
                     const btnX = (CONFIG.WIDTH - btnWidth) / 2;
-                    const btnY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 18;
+                    const btnY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + btnGap;
 
                     if (pos.x >= btnX && pos.x <= btnX + btnWidth &&
                         pos.y >= btnY && pos.y <= btnY + btnHeight) {
@@ -1582,7 +1635,10 @@
             }
 
             if (showDictionary) {
-                const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80;
+                // Calculate dictionary start Y using same formula as rendering
+                const btnGap = Math.floor(CONFIG.HEIGHT * 0.03);
+                const baseBtnHeight = Math.floor(CONFIG.WIDTH * 0.4 * 0.3125);
+                const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + btnGap + baseBtnHeight + Math.floor(CONFIG.HEIGHT * 0.02);
 
                 // Only interact with dictionary scrollbar if clicking within dictionary area
                 if (pos.y >= dictStartY) {
@@ -1765,8 +1821,8 @@
 
             const rawPull = Math.sqrt(pullX * pullX + pullY * pullY);
 
-            // Linear power scaling (matches indicator)
-            const maxRawPull = 250;
+            // Linear power scaling (matches indicator) - proportional to screen
+            const maxRawPull = CONFIG.HEIGHT * 0.4;
             const clampedPull = Math.min(rawPull, maxRawPull);
             const normalizedPower = clampedPull / maxRawPull; // 0 to 1
 
@@ -1780,14 +1836,14 @@
             // Need ~75 units of travel for weight 8 at 100% power
             currentObject.vz = normalizedPower * 6.5 * weightFactor * directionMultiplier;
 
-            // Lateral velocity
-            currentObject.vx = -pullX * 0.003 * weightFactor;
+            // Lateral velocity - normalized to screen width
+            currentObject.vx = -pullX / CONFIG.WIDTH * 1.2 * weightFactor;
 
             // Vertical velocity for nice arc
             currentObject.vy = 0.06 + normalizedPower * 0.7 * weightFactor;
 
             // Spin
-            currentObject.rotationSpeed = (Math.random() - 0.5) * 0.08 + pullX * 0.0003;
+            currentObject.rotationSpeed = (Math.random() - 0.5) * 0.08 + pullX / CONFIG.WIDTH * 0.12;
 
             trailPoints = [];
             shotsTaken++;
