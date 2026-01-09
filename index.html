@@ -590,19 +590,45 @@
 
         function generateLetterPool() {
             // Strategy: Pick 16 words that share letters efficiently
-            // Then generate a letter pool that can form all of them
+            // Prioritize shorter words first since they share letters better
 
             let bestWords = [];
             let bestLetters = [];
 
-            for (let attempt = 0; attempt < 50; attempt++) {
-                // Shuffle word list and try to pick 16 words that fit in 12 letters
-                const shuffled = [...WORD_LIST].sort(() => Math.random() - 0.5);
+            for (let attempt = 0; attempt < 100; attempt++) {
+                // Sort by length first (shorter words share letters better), then shuffle within groups
+                const byLength = {};
+                for (const word of WORD_LIST) {
+                    const len = word.length;
+                    if (!byLength[len]) byLength[len] = [];
+                    byLength[len].push(word);
+                }
+
+                // Shuffle each length group
+                for (const len of Object.keys(byLength)) {
+                    byLength[len].sort(() => Math.random() - 0.5);
+                }
+
+                // Build word list: 3-letter first, then 4, 5, etc (but shuffle order of lengths sometimes)
+                const lengths = Object.keys(byLength).map(Number).sort((a, b) => a - b);
+                if (Math.random() < 0.3) {
+                    // Sometimes try mixing it up
+                    lengths.sort(() => Math.random() - 0.5);
+                }
+
+                const shuffled = [];
+                for (const len of lengths) {
+                    shuffled.push(...byLength[len]);
+                }
+
                 const candidateWords = [];
                 let candidateLetters = [];
 
                 for (const word of shuffled) {
                     if (candidateWords.length >= CONFIG.PILE_COUNT) break;
+
+                    // Skip if we already have this word
+                    if (candidateWords.includes(word)) continue;
 
                     // Check if adding this word would require too many letters
                     const testWords = [...candidateWords, word];
@@ -791,23 +817,6 @@
                 uiCtx.fillText(message, CONFIG.WIDTH / 2, CONFIG.HEIGHT / 2 + 8);
             }
 
-            // Fling instructions - no background, use shadows
-            if (gameState === 'FLING' && currentObject) {
-                uiCtx.font = '18px Arial';
-                uiCtx.textAlign = 'center';
-                // Shadow
-                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                uiCtx.fillText('Drag down to throw forward!', CONFIG.WIDTH / 2 + 1, CONFIG.HEIGHT - 138 + 1);
-                uiCtx.fillStyle = '#FFF';
-                uiCtx.fillText('Drag down to throw forward!', CONFIG.WIDTH / 2, CONFIG.HEIGHT - 138);
-
-                uiCtx.font = '14px Arial';
-                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight}`, CONFIG.WIDTH / 2 + 1, CONFIG.HEIGHT - 115 + 1);
-                uiCtx.fillStyle = '#DDD';
-                uiCtx.fillText(`Shots: ${shotsTaken} | Weight: ${currentObject.weight}`, CONFIG.WIDTH / 2, CONFIG.HEIGHT - 115);
-            }
-
             // Fling indicator
             if (gameState === 'FLING' && flingStart && flingCurrent) {
                 renderFlingIndicator();
@@ -980,7 +989,7 @@
                 uiCtx.fillText(letter.char, x + size / 2, y + size / 2);
             }
 
-            if (isValid) {
+            if (isValid && gameState === 'WORD_BUILDING') {
                 // Pulsing animation - slower (half speed)
                 const pulseScale = 1 + Math.sin(animTime * 2) * 0.03;
                 const baseBtnWidth = 160;
@@ -1065,6 +1074,30 @@
             uiCtx.fillText('TIDINESS', startX + 1, squareY - 18 + 1);
             uiCtx.fillStyle = '#CCC';
             uiCtx.fillText('TIDINESS', startX, squareY - 18);
+
+            // "WEIGHT X" label - right aligned at same level as TIDINESS
+            // Show when there's an active object OR when a valid word is formed
+            let displayWeight = null;
+            if (currentObject && currentObject.weight) {
+                displayWeight = currentObject.weight;
+            } else if (gameState === 'WORD_BUILDING') {
+                const word = getSelectedWord();
+                if (isValidWord(word)) {
+                    displayWeight = DICTIONARY[word].weight;
+                }
+            }
+
+            if (displayWeight !== null) {
+                const endX = startX + totalWidth;
+                const weightText = 'WEIGHT ' + displayWeight;
+                uiCtx.font = 'bold 21px Arial';
+                uiCtx.textAlign = 'right';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                uiCtx.fillText(weightText, endX + 1, squareY - 18 + 1);
+                uiCtx.fillStyle = '#CCC';
+                uiCtx.fillText(weightText, endX, squareY - 18);
+            }
 
             for (let i = 0; i < CONFIG.PILE_COUNT; i++) {
                 const x = startX + i * (squareSize + squareGap);
@@ -1159,22 +1192,15 @@
             const pullY = flingCurrent.y - flingStart.y;
             const rawPull = Math.sqrt(pullX * pullX + pullY * pullY);
 
-            // Only show meaningful indicator when pulling down (forward throw)
+            // Only show indicator when pulling down (forward throw)
             if (pullY <= 0) {
-                if (rawPull > 5) {
-                    uiCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-                    uiCtx.font = '14px Arial';
-                    uiCtx.textAlign = 'center';
-                    uiCtx.fillText('↓ Pull down to throw ↓', flingStart.x, flingStart.y + 30);
-                }
                 return;
             }
 
-            // Non-linear power: sqrt curve for easier precision at low power
-            // Max raw pull is 200 pixels, maps to 100%
-            const maxRawPull = 200;
-            const clampedPull = Math.min(rawPull, maxRawPull);
-            const power = Math.max(1, 100 * Math.sqrt(clampedPull / maxRawPull));
+            // Linear power scaling for precise control at low power
+            // Max raw pull is 250 pixels, maps to 100%
+            const maxRawPull = 250;
+            const power = Math.min(100, Math.max(1, Math.round(100 * rawPull / maxRawPull)));
 
             // Pull line (where finger dragged)
             uiCtx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
@@ -1187,7 +1213,7 @@
             uiCtx.setLineDash([]);
 
             // Throw direction indicator - always points UP (forward into screen)
-            const throwLength = power * 0.8;
+            const throwLength = Math.max(8, power * 0.8);
             const throwEndX = flingStart.x;
             const throwEndY = flingStart.y - throwLength;
 
@@ -1430,8 +1456,8 @@
         function handlePointerStart(event) {
             const pos = getCanvasCoords(event);
 
-            // During intro dialog, tapping advances or skips
-            if (gameState === 'INTRO' && dialogActive) {
+            // During dialog, tapping advances or skips
+            if (dialogActive && (gameState === 'INTRO' || gameState === 'TRANSITIONING')) {
                 // If line is still typing, complete it instantly
                 if (currentDialogChar < dialogLines[currentDialogLine].length) {
                     currentDialogChar = dialogLines[currentDialogLine].length;
@@ -1444,7 +1470,11 @@
 
                     if (currentDialogLine >= dialogLines.length) {
                         dialogActive = false;
-                        startLetterReveal();
+                        if (gameState === 'INTRO') {
+                            startLetterReveal();
+                        } else if (gameState === 'TRANSITIONING') {
+                            finishSuccessTransition();
+                        }
                     }
                 }
                 return;
@@ -1482,6 +1512,23 @@
                 }
             }
 
+            // Submit button - check even with dictionary open (closes dictionary and submits)
+            if (gameState === 'WORD_BUILDING') {
+                const word = getSelectedWord();
+                if (isValidWord(word)) {
+                    const btnWidth = 160;
+                    const btnHeight = 50;
+                    const btnX = (CONFIG.WIDTH - btnWidth) / 2;
+                    const btnY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 18;
+
+                    if (pos.x >= btnX && pos.x <= btnX + btnWidth &&
+                        pos.y >= btnY && pos.y <= btnY + btnHeight) {
+                        submitWord(); // This closes dictionary automatically
+                        return;
+                    }
+                }
+            }
+
             if (showDictionary) {
                 const dictStartY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 80;
 
@@ -1505,8 +1552,9 @@
                     dictDragStart = pos.y;
                     dictDragScrollStart = dictScrollY;
                     dictScrollbarDrag = false;
+                    return;
                 }
-                return;
+                // Allow clicks above dictionary area to fall through to word letter handling
             }
 
             if (gameState === 'VICTORY') {
@@ -1523,21 +1571,6 @@
                     if (pos.x >= letter.currentX && pos.x <= letter.currentX + wordSize &&
                         pos.y >= letter.currentY && pos.y <= letter.currentY + wordSize) {
                         deselectLetter(letterIndex);
-                        return;
-                    }
-                }
-
-                // Submit button - larger hit area
-                const word = getSelectedWord();
-                if (isValidWord(word)) {
-                    const btnWidth = 160;
-                    const btnHeight = 50;
-                    const btnX = (CONFIG.WIDTH - btnWidth) / 2;
-                    const btnY = CONFIG.WORD_Y + CONFIG.WORD_LETTER_SIZE + 18;
-
-                    if (pos.x >= btnX && pos.x <= btnX + btnWidth &&
-                        pos.y >= btnY && pos.y <= btnY + btnHeight) {
-                        submitWord();
                         return;
                     }
                 }
@@ -1658,7 +1691,6 @@
             cameraMode = 'DUMPYARD';
             setCameraBehindObject();
 
-            showMessage(`Found: ${word}!`);
             gameState = 'OBJECT_SPAWN';
             pendingPileIndex = -1; // Reset pending pile
 
@@ -1680,10 +1712,10 @@
 
             const rawPull = Math.sqrt(pullX * pullX + pullY * pullY);
 
-            // Non-linear power: sqrt curve for easier precision at low power
-            const maxRawPull = 200;
+            // Linear power scaling (matches indicator)
+            const maxRawPull = 250;
             const clampedPull = Math.min(rawPull, maxRawPull);
-            const normalizedPower = Math.sqrt(clampedPull / maxRawPull); // 0 to 1
+            const normalizedPower = clampedPull / maxRawPull; // 0 to 1
 
             // Linear weight: weight 8 travels 1/8 as far as weight 1
             const weightFactor = 1 / currentObject.weight;
@@ -1745,6 +1777,9 @@
                                 // Start letter reveal animation after intro dialog
                                 if (gameState === 'INTRO') {
                                     startLetterReveal();
+                                } else if (gameState === 'TRANSITIONING') {
+                                    // After success dialog, transition to next round
+                                    finishSuccessTransition();
                                 }
                             }
                         }
@@ -1879,7 +1914,6 @@
                         return; // Exit update - currentObject is now null
                     } else if (currentObject.z < lakeStart) {
                         // Landed short - stay here, shoot toward lake
-                        showMessage('Too short!');
                         cameraMode = 'DUMPYARD';
                         trailPoints = [];
                         updateTrail();
@@ -1887,7 +1921,6 @@
                         gameState = 'FLING';
                     } else if (currentObject.z > lakeEnd) {
                         // Overshot - stay here, shoot back toward lake
-                        showMessage('Too far!');
                         cameraMode = 'GRASS';
                         trailPoints = [];
                         updateTrail();
@@ -1899,7 +1932,8 @@
         }
 
         function handleSuccess() {
-            const wordPoints = currentObject.word.length * CONFIG.POINTS_PER_LETTER;
+            const thrownWord = currentObject.word; // Store before clearing
+            const wordPoints = thrownWord.length * CONFIG.POINTS_PER_LETTER;
             const shotPenalty = (shotsTaken - 1) * CONFIG.SHOT_PENALTY;
             const bonus = shotsTaken === 1 ? CONFIG.PERFECT_BONUS : 0;
             const earnedPoints = Math.max(0, wordPoints - shotPenalty + bonus);
@@ -1922,10 +1956,6 @@
                 objectMesh = null;
             }
 
-            let msg = `+${earnedPoints}!`;
-            if (bonus > 0) msg += ' PERFECT!';
-            showMessage(msg);
-
             trailPoints = [];
             updateTrail();
 
@@ -1945,13 +1975,32 @@
             currentObject = null;
             activePileIndex = -1;
 
-            setTimeout(() => {
-                generateLetterPool();
-                cameraMode = 'DUMPYARD';
-                targetCameraPos.set(0, 5, -10);
-                targetCameraLook.set(0, 0, 50);
-                gameState = 'WORD_BUILDING';
-            }, 1500);
+            // Show boss dialog after successful shot
+            startSuccessDialog(thrownWord);
+        }
+
+        function startSuccessDialog(itemName) {
+            const successLines = [
+                `Good riddance. Who needs ${itemName}.`,
+                "Beauty. Keep going.",
+                "Ahh, this place feels cleaner already.",
+                "The best junk is junk out of my yard."
+            ];
+
+            dialogActive = true;
+            dialogLines = [successLines[Math.floor(Math.random() * successLines.length)]];
+            currentDialogLine = 0;
+            currentDialogChar = 0;
+            dialogCharTimer = 0;
+            dialogPauseTimer = 0;
+        }
+
+        function finishSuccessTransition() {
+            generateLetterPool();
+            cameraMode = 'DUMPYARD';
+            targetCameraPos.set(0, 5, -10);
+            targetCameraLook.set(0, 0, 50);
+            gameState = 'WORD_BUILDING';
         }
 
         function showMessage(msg) {
