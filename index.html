@@ -422,7 +422,7 @@
             'SQUID': { weight: 2 }, 'BANJO': { weight: 3 }, 'CROCS': { weight: 2 },
             'ROBOT': { weight: 6 }, 'WATCH': { weight: 1 }, 'PANTS': { weight: 1 },
             'JEWEL': { weight: 1 }, 'PLANE': { weight: 8 }, 'DRESS': { weight: 1 },
-            'DRYER': { weight: 7 }, 'YACHT': { weight: 8 }, 'PHONE': { weight: 1 },
+            'DRYER': { weight: 7 }, 'BOAT': { weight: 4 }, 'PHONE': { weight: 1 },
             'TOWER': { weight: 8 }, 'CROWN': { weight: 2 }, 'STOVE': { weight: 7 },
             'SWORD': { weight: 3 }, 'TABLE': { weight: 5 }, 'COUCH': { weight: 6 },
             'TRUCK': { weight: 8 }, 'ALIEN': { weight: 2 }, 'DONUT': { weight: 1 },
@@ -933,109 +933,117 @@
             return letters;
         }
 
-        function generateLetterPool() {
-            // Strategy: Pick 16 words that share letters efficiently
-            // Use varied approaches to avoid always getting the same word patterns
+        // Store the game's 16 words (one per round, set once per game)
+        let gameWords = [];
 
-            let bestWords = [];
-            let bestLetters = [];
+        function selectGameWords() {
+            // Called ONCE at game start - picks 16 words, one for each round
+            // These words stay constant for the entire game and appear as green in dictionary
 
-            for (let attempt = 0; attempt < 100; attempt++) {
-                // Group words by length
-                const byLength = {};
-                for (const word of WORD_LIST) {
-                    const len = word.length;
-                    if (!byLength[len]) byLength[len] = [];
-                    byLength[len].push(word);
-                }
+            // Shuffle the word list
+            const shuffled = [...WORD_LIST];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
 
-                // Shuffle each length group thoroughly
-                for (const len of Object.keys(byLength)) {
-                    for (let i = byLength[len].length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [byLength[len][i], byLength[len][j]] = [byLength[len][j], byLength[len][i]];
-                    }
-                }
+            // Pick 16 words with variety in length
+            // Try to get a mix: some short, some medium, some long
+            const byLength = {};
+            for (const word of shuffled) {
+                const len = word.length;
+                if (!byLength[len]) byLength[len] = [];
+                byLength[len].push(word);
+            }
 
-                // Decide on a strategy for this attempt
-                const strategy = Math.random();
-                const lengths = Object.keys(byLength).map(Number);
-                let orderedLengths;
+            gameWords = [];
 
-                if (strategy < 0.35) {
-                    // Strategy 1: Short words first (classic approach)
-                    orderedLengths = lengths.sort((a, b) => a - b);
-                } else if (strategy < 0.55) {
-                    // Strategy 2: Start with one long word, then short
-                    orderedLengths = lengths.sort((a, b) => b - a); // Long first
-                } else if (strategy < 0.75) {
-                    // Strategy 3: Medium words first, then short, then long
-                    orderedLengths = lengths.sort((a, b) => {
-                        const aMid = Math.abs(a - 5);
-                        const bMid = Math.abs(b - 5);
-                        return aMid - bMid;
-                    });
-                } else {
-                    // Strategy 4: Fully random order
-                    orderedLengths = lengths.sort(() => Math.random() - 0.5);
-                }
+            // Strategy: pick words in a varied pattern to ensure interesting gameplay
+            // Aim for roughly: 4 short (3-4), 6 medium (5-6), 6 long (7-8)
+            const targetCounts = { short: 4, medium: 6, long: 6 };
+            const counts = { short: 0, medium: 0, long: 0 };
 
-                // Build shuffled word list based on chosen strategy
-                const shuffled = [];
-                for (const len of orderedLengths) {
-                    shuffled.push(...byLength[len]);
-                }
+            for (const word of shuffled) {
+                if (gameWords.length >= CONFIG.PILE_COUNT) break;
 
-                const candidateWords = [];
-                let candidateLetters = [];
+                const len = word.length;
+                let category;
+                if (len <= 4) category = 'short';
+                else if (len <= 6) category = 'medium';
+                else category = 'long';
 
-                for (const word of shuffled) {
-                    if (candidateWords.length >= CONFIG.PILE_COUNT) break;
-
-                    // Skip if we already have this word
-                    if (candidateWords.includes(word)) continue;
-
-                    // Check if adding this word would require too many letters
-                    const testWords = [...candidateWords, word];
-                    const required = getRequiredLetters(testWords);
-
-                    if (required.length <= CONFIG.LETTER_COUNT) {
-                        candidateWords.push(word);
-                        candidateLetters = required;
-                    }
-                }
-
-                if (candidateWords.length >= CONFIG.PILE_COUNT) {
-                    bestWords = candidateWords;
-                    bestLetters = candidateLetters;
-                    break;
-                }
-
-                // Keep best attempt so far
-                if (candidateWords.length > bestWords.length) {
-                    bestWords = candidateWords;
-                    bestLetters = candidateLetters;
+                if (counts[category] < targetCounts[category]) {
+                    gameWords.push(word);
+                    counts[category]++;
                 }
             }
 
-            // Store the 16 pre-selected words for this game (sorted alphabetically for display)
-            preSelectedWords = bestWords.slice(0, CONFIG.PILE_COUNT).sort((a, b) => a.localeCompare(b));
+            // If we didn't get 16, fill with any remaining words
+            for (const word of shuffled) {
+                if (gameWords.length >= CONFIG.PILE_COUNT) break;
+                if (!gameWords.includes(word)) {
+                    gameWords.push(word);
+                }
+            }
 
-            // Start with required letters
-            let chars = [...bestLetters];
+            // Shuffle the order so difficulty isn't predictable
+            for (let i = gameWords.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [gameWords[i], gameWords[j]] = [gameWords[j], gameWords[i]];
+            }
 
-            // Pad to 12 letters with useful letters (more varied distribution)
-            const vowels = 'EEEAAAIIOOU';
-            const consonants = 'TTNNSRRHLLDCMBBPFGWY';
+            // Store for dictionary display (sorted alphabetically)
+            preSelectedWords = [...gameWords].sort((a, b) => a.localeCompare(b));
+        }
+
+        function generateLetterPool() {
+            // Called each round - generates letters that guarantee the current round's word can be formed
+            // Plus random filler letters weighted by English letter frequency
+
+            // Get the word for this round (pilesCleared = current round index, 0-15)
+            const currentRound = pilesCleared;
+            const roundWord = gameWords[currentRound] || gameWords[0];
+
+            // Start with letters required for this round's word
+            let chars = roundWord.split('');
+
+            // Letter frequency weights (roughly based on English)
+            const letterWeights = {
+                'E': 12, 'T': 9, 'A': 8, 'O': 8, 'I': 7, 'N': 7, 'S': 6, 'H': 6, 'R': 6,
+                'D': 4, 'L': 4, 'C': 3, 'U': 3, 'M': 3, 'W': 2, 'F': 2, 'G': 2, 'Y': 2,
+                'P': 2, 'B': 1, 'V': 1, 'K': 1, 'J': 1, 'X': 1, 'Q': 1, 'Z': 1
+            };
+
+            // Build weighted pool
+            let weightedPool = [];
+            for (const [letter, weight] of Object.entries(letterWeights)) {
+                for (let i = 0; i < weight; i++) {
+                    weightedPool.push(letter);
+                }
+            }
+
+            // Track letter counts to avoid too many duplicates
             const letterCount = {};
             chars.forEach(c => letterCount[c] = (letterCount[c] || 0) + 1);
 
+            // Fill remaining slots up to 12 letters
             while (chars.length < CONFIG.LETTER_COUNT) {
+                // Ensure reasonable vowel/consonant balance
                 const vowelCount = chars.filter(c => 'AEIOU'.includes(c)).length;
-                const pool = vowelCount < 4 ? vowels : consonants;
-                const letter = pool[Math.floor(Math.random() * pool.length)];
+                const needVowel = vowelCount < 4 && Math.random() < 0.6;
 
-                if ((letterCount[letter] || 0) < 3) {
+                let letter;
+                let attempts = 0;
+                do {
+                    letter = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+                    const isVowel = 'AEIOU'.includes(letter);
+                    attempts++;
+                    // Accept if: matches vowel need, or we've tried enough times
+                    if ((needVowel === isVowel) || attempts > 20) break;
+                } while (true);
+
+                // Don't allow more than 2 of the same letter (unless word requires it)
+                if ((letterCount[letter] || 0) < 2) {
                     chars.push(letter);
                     letterCount[letter] = (letterCount[letter] || 0) + 1;
                 }
@@ -2221,13 +2229,14 @@
             // Velocities tuned so weight 8 at 100% power can reach lake from back of dumpyard
             // Back of dumpyard: z ≈ 5, lake starts at z = 80 (LAKE_Z - LAKE_WIDTH/2 = 100 - 20)
             // Need ~75 units of travel for weight 8 at 100% power
-            currentObject.vz = normalizedPower * 6.5 * weightFactor * directionMultiplier;
+            // Increased base velocity to ensure heavy items can reach
+            currentObject.vz = normalizedPower * 8.0 * weightFactor * directionMultiplier;
 
             // Lateral velocity - normalized to screen width
             currentObject.vx = -pullX / CONFIG.WIDTH * 1.2 * weightFactor;
 
-            // Vertical velocity for nice arc
-            currentObject.vy = 0.06 + normalizedPower * 0.7 * weightFactor;
+            // Vertical velocity for nice arc - increased for longer flight time
+            currentObject.vy = 0.08 + normalizedPower * 0.9 * weightFactor;
 
             // Spin
             currentObject.rotationSpeed = (Math.random() - 0.5) * 0.08 + pullX / CONFIG.WIDTH * 0.12;
@@ -2582,6 +2591,7 @@
             cameraMode = 'DUMPYARD';
             hasShownShootHint = false;
             lastWordValid = false;
+            gameWords = []; // Reset so new words are selected for new game
 
             if (objectMesh) {
                 scene.remove(objectMesh);
@@ -2598,7 +2608,8 @@
             camera.lookAt(targetCameraLook);
 
             createTrashPiles();
-            generateLetterPool();
+            selectGameWords(); // Pick 16 words for the whole game
+            generateLetterPool(); // Set up letter tiles
 
             // Start intro dialog
             gameState = 'INTRO';
