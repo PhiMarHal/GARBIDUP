@@ -400,44 +400,60 @@
             'CUP': { weight: 1 }, 'LID': { weight: 1 }, 'TOY': { weight: 1 },
             'RAG': { weight: 1 }, 'WIG': { weight: 1 }, 'HAT': { weight: 1 },
             'BRA': { weight: 1 }, 'EGG': { weight: 1 }, 'URN': { weight: 2 },
+            'BUS': { weight: 8 }, 'CAR': { weight: 8 },
 
-            // 4-letter (weights 2-3)
+            // 4-letter (weights 1-4)
             'TIRE': { weight: 3 }, 'LAMP': { weight: 2 }, 'BOOK': { weight: 2 },
             'DRUM': { weight: 3 }, 'PIPE': { weight: 2 }, 'ROPE': { weight: 2 },
             'VASE': { weight: 2 }, 'TRAY': { weight: 2 }, 'BOWL': { weight: 2 },
             'CAGE': { weight: 2 }, 'SOCK': { weight: 1 }, 'BOOT': { weight: 2 },
             'FORK': { weight: 1 }, 'CLOG': { weight: 2 }, 'GONG': { weight: 3 },
             'BUST': { weight: 3 }, 'WAND': { weight: 1 }, 'TUBA': { weight: 4 },
+            'POLE': { weight: 3 }, 'SIGN': { weight: 2 }, 'OVEN': { weight: 7 },
+            'SHOE': { weight: 1 }, 'COAT': { weight: 1 }, 'GATE': { weight: 5 },
+            'DOOR': { weight: 5 },
 
-            // 5-letter (weights 3-4)
+            // 5-letter (weights 1-8)
             'CHAIR': { weight: 4 }, 'CRATE': { weight: 4 }, 'STOOL': { weight: 4 },
             'BRICK': { weight: 5 }, 'PLANT': { weight: 3 }, 'BOARD': { weight: 3 },
             'FRAME': { weight: 3 }, 'CLOCK': { weight: 3 }, 'RADIO': { weight: 3 },
             'TRUNK': { weight: 5 }, 'SPORK': { weight: 1 }, 'DECOY': { weight: 2 },
             'GNOME': { weight: 3 }, 'TIARA': { weight: 2 }, 'KEBAB': { weight: 1 },
             'SQUID': { weight: 2 }, 'BANJO': { weight: 3 }, 'CROCS': { weight: 2 },
+            'ROBOT': { weight: 6 }, 'WATCH': { weight: 1 }, 'PANTS': { weight: 1 },
+            'JEWEL': { weight: 1 }, 'PLANE': { weight: 8 }, 'DRESS': { weight: 1 },
+            'DRYER': { weight: 7 }, 'YACHT': { weight: 8 }, 'PHONE': { weight: 1 },
+            'TOWER': { weight: 8 }, 'CROWN': { weight: 2 }, 'STOVE': { weight: 7 },
+            'SWORD': { weight: 3 }, 'TABLE': { weight: 5 }, 'COUCH': { weight: 6 },
+            'TRUCK': { weight: 8 }, 'ALIEN': { weight: 2 }, 'DONUT': { weight: 1 },
+            'CANOE': { weight: 5 },
 
-            // 6-letter (weights 4-6)
+            // 6-letter (weights 1-8)
             'BUCKET': { weight: 3 }, 'BARREL': { weight: 6 }, 'BOTTLE': { weight: 2 },
             'MIRROR': { weight: 4 }, 'CARPET': { weight: 5 }, 'FRIDGE': { weight: 8 },
             'DRAWER': { weight: 5 }, 'LADDER': { weight: 6 }, 'HEATER': { weight: 6 },
             'BASKET': { weight: 3 }, 'FEDORA': { weight: 2 }, 'TURBAN': { weight: 2 },
             'PIGEON': { weight: 2 }, 'CACTUS': { weight: 3 }, 'TURNIP': { weight: 2 },
-            'WAFFLE': { weight: 1 }, 'DONUT': { weight: 1 }, 'SPONGE': { weight: 1 },
-            'CANOE': { weight: 5 }, 'IGLOO': { weight: 7 }, 'ANCHOR': { weight: 8 },
+            'WAFFLE': { weight: 1 }, 'SPONGE': { weight: 1 }, 'IGLOO': { weight: 7 },
+            'ANCHOR': { weight: 8 }, 'PILLAR': { weight: 8 }, 'CAMERA': { weight: 2 },
+            'LAPTOP': { weight: 2 }, 'WINDOW': { weight: 4 }, 'BANNER': { weight: 1 },
+            'SHIELD': { weight: 4 }, 'MONKEY': { weight: 3 },
 
-            // 7-letter (weights 5-8)
+            // 7-letter (weights 1-8)
             'BATHTUB': { weight: 8 }, 'BICYCLE': { weight: 7 }, 'MONITOR': { weight: 5 },
             'FREEZER': { weight: 8 }, 'TOASTER': { weight: 3 }, 'BLENDER': { weight: 4 },
             'PRINTER': { weight: 6 }, 'CURTAIN': { weight: 3 }, 'UKULELE': { weight: 2 },
             'SPATULA': { weight: 2 }, 'HAMMOCK': { weight: 4 }, 'PINATA': { weight: 2 },
             'TRICORN': { weight: 2 }, 'PELICAN': { weight: 3 }, 'COCONUT': { weight: 3 },
             'PANCAKE': { weight: 1 }, 'BAGPIPE': { weight: 4 }, 'COWBELL': { weight: 3 },
+            'CHIMNEY': { weight: 8 }, 'BALCONY': { weight: 8 }, 'PENGUIN': { weight: 3 },
+            'GLASSES': { weight: 1 },
 
-            // 8-letter bonus (weights 6-8)
+            // 8-letter bonus (weights 2-7)
             'TROMBONE': { weight: 5 }, 'SOMBRERO': { weight: 2 }, 'UNICYCLE': { weight: 6 },
             'DOORKNOB': { weight: 3 }, 'FLAMINGO': { weight: 3 }, 'ARMCHAIR': { weight: 7 },
             'FISHBOWL': { weight: 4 }, 'TRASHCAN': { weight: 4 }, 'BACKPACK': { weight: 4 },
+            'PAINTING': { weight: 3 }, 'COMPUTER': { weight: 4 },
         };
 
         const WORD_LIST = Object.keys(DICTIONARY);
@@ -919,13 +935,13 @@
 
         function generateLetterPool() {
             // Strategy: Pick 16 words that share letters efficiently
-            // Prioritize shorter words first since they share letters better
+            // Use varied approaches to avoid always getting the same word patterns
 
             let bestWords = [];
             let bestLetters = [];
 
             for (let attempt = 0; attempt < 100; attempt++) {
-                // Sort by length first (shorter words share letters better), then shuffle within groups
+                // Group words by length
                 const byLength = {};
                 for (const word of WORD_LIST) {
                     const len = word.length;
@@ -933,20 +949,40 @@
                     byLength[len].push(word);
                 }
 
-                // Shuffle each length group
+                // Shuffle each length group thoroughly
                 for (const len of Object.keys(byLength)) {
-                    byLength[len].sort(() => Math.random() - 0.5);
+                    for (let i = byLength[len].length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [byLength[len][i], byLength[len][j]] = [byLength[len][j], byLength[len][i]];
+                    }
                 }
 
-                // Build word list: 3-letter first, then 4, 5, etc (but shuffle order of lengths sometimes)
-                const lengths = Object.keys(byLength).map(Number).sort((a, b) => a - b);
-                if (Math.random() < 0.3) {
-                    // Sometimes try mixing it up
-                    lengths.sort(() => Math.random() - 0.5);
+                // Decide on a strategy for this attempt
+                const strategy = Math.random();
+                const lengths = Object.keys(byLength).map(Number);
+                let orderedLengths;
+
+                if (strategy < 0.35) {
+                    // Strategy 1: Short words first (classic approach)
+                    orderedLengths = lengths.sort((a, b) => a - b);
+                } else if (strategy < 0.55) {
+                    // Strategy 2: Start with one long word, then short
+                    orderedLengths = lengths.sort((a, b) => b - a); // Long first
+                } else if (strategy < 0.75) {
+                    // Strategy 3: Medium words first, then short, then long
+                    orderedLengths = lengths.sort((a, b) => {
+                        const aMid = Math.abs(a - 5);
+                        const bMid = Math.abs(b - 5);
+                        return aMid - bMid;
+                    });
+                } else {
+                    // Strategy 4: Fully random order
+                    orderedLengths = lengths.sort(() => Math.random() - 0.5);
                 }
 
+                // Build shuffled word list based on chosen strategy
                 const shuffled = [];
-                for (const len of lengths) {
+                for (const len of orderedLengths) {
                     shuffled.push(...byLength[len]);
                 }
 
@@ -988,9 +1024,9 @@
             // Start with required letters
             let chars = [...bestLetters];
 
-            // Pad to 12 letters with useful letters
-            const vowels = 'EEEEAAAIIIOOU';
-            const consonants = 'TTNNSSRRHHLLDDCCMMBBPPFFGGWW';
+            // Pad to 12 letters with useful letters (more varied distribution)
+            const vowels = 'EEEAAAIIOOU';
+            const consonants = 'TTNNSRRHLLDCMBBPFGWY';
             const letterCount = {};
             chars.forEach(c => letterCount[c] = (letterCount[c] || 0) + 1);
 
@@ -2461,7 +2497,11 @@
                 `Good riddance. Who needs ${itemName}.`,
                 "Beauty. Keep going.",
                 "Ahh, this place feels cleaner already.",
-                "The best junk is junk out of my yard."
+                "The best junk is junk out of my yard.",
+                `${playerName}, I knew I was right to hire you.`,
+                `Look at the fishes chomp on that ${itemName}!`,
+                `Keep going, ${playerName}, we'll be done in no time.`,
+                `${itemName}? Couldn't catch me buying that.`
             ];
 
             dialogActive = true;
