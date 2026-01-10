@@ -601,8 +601,7 @@
             directionalLight.position.set(10, 20, -10);
             scene.add(directionalLight);
 
-            // Build environment
-            buildEnvironment();
+            // Environment is built after textures load
 
             // Handle resize
             handleResize();
@@ -693,7 +692,21 @@
             // Ground - Dumpyard (brown, from z=-10 to lake start)
             const dumpLength = lakeStart + 10;
             const dumpGeom = new THREE.BoxGeometry(corridorWidth, 1, dumpLength);
-            const dumpMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
+
+            let dumpMat;
+            if (groundTexture) {
+                // Calculate repeat based on ground size (512x512 texture = ~8 world units)
+                const repeatX = corridorWidth / 8;
+                const repeatZ = dumpLength / 8;
+                groundTexture.repeat.set(repeatX, repeatZ);
+                dumpMat = new THREE.MeshLambertMaterial({
+                    map: groundTexture,
+                    color: 0xffffff // Use white to show texture colors properly
+                });
+            } else {
+                dumpMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
+            }
+
             const dumpGround = new THREE.Mesh(dumpGeom, dumpMat);
             dumpGround.position.set(0, -0.5, (lakeStart - 10) / 2);
             scene.add(dumpGround);
@@ -773,20 +786,43 @@
         const trashTextures = [];
         let trashTexturesLoaded = false;
 
-        function loadTrashTextures(onComplete) {
+        // Ground texture
+        let groundTexture = null;
+
+        function loadTextures(onComplete) {
             const loader = new THREE.TextureLoader();
             let loadedCount = 0;
             let successCount = 0;
+            const totalToLoad = 9; // 8 trash + 1 ground
 
             function checkComplete() {
                 loadedCount++;
-                if (loadedCount === 8) {
+                if (loadedCount === totalToLoad) {
                     console.log(`Trash textures: ${successCount}/8 loaded successfully`);
                     trashTexturesLoaded = successCount > 0;
                     if (onComplete) onComplete();
                 }
             }
 
+            // Load ground texture
+            const groundPath = getAssetPath('assets/ground_yard.png');
+            loader.load(
+                groundPath,
+                (texture) => {
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    groundTexture = texture;
+                    console.log('Ground texture loaded');
+                    checkComplete();
+                },
+                undefined,
+                (error) => {
+                    console.log('Failed to load ground_yard.png, using fallback color');
+                    checkComplete();
+                }
+            );
+
+            // Load trash textures
             for (let i = 1; i <= 8; i++) {
                 const path = getAssetPath(`assets/trash_${i}.png`);
                 loader.load(
@@ -2711,8 +2747,9 @@
             initRemixSDK();
             handleResize(); // Initial sizing
 
-            // Load trash textures, then start game
-            loadTrashTextures(() => {
+            // Load textures, then build environment and start game
+            loadTextures(() => {
+                buildEnvironment();
                 resetGame();
                 gameLoop();
             });
