@@ -1123,13 +1123,13 @@
                 const fish = new THREE.Sprite(material);
 
                 // Fish is 128x128, scale appropriately
-                const scale = 0.8 + Math.random() * 0.4;
+                const scale = 1.2 + Math.random() * 0.4;
                 fish.scale.set(scale, scale, 1);
 
                 // Fish starts on one side and jumps to the other side
                 const startsOnLeft = Math.random() < 0.5;
-                const lateralOffset = 1 + Math.random(); // 1-2 units away
-                const depthOffset = (Math.random() - 0.5) * 3; // Slight z variation
+                const lateralOffset = 0.5 + Math.random(); // 1-2 units away
+                const depthOffset = (Math.random() - 0) * 4; // Slight z variation
 
                 const startX = startsOnLeft ? (x - lateralOffset) : (x + lateralOffset);
                 const endX = startsOnLeft ? (x + lateralOffset) : (x - lateralOffset);
@@ -1152,9 +1152,9 @@
                     startZ: startZ,
                     endX: endX,
                     endZ: endZ,
-                    jumpHeight: 0.5 + Math.random() * 0.5, // Lower jump
-                    duration: 200 + Math.random() * 200, // Faster
-                    startTime: performance.now() + i * 60, // Stagger spawns
+                    jumpHeight: 0.4 + Math.random() * 0.4, // Lower jump
+                    duration: 400 + Math.random() * 400, // Faster
+                    startTime: performance.now() + i * 100, // Stagger spawns
                     phase: 'waiting'
                 });
             }
