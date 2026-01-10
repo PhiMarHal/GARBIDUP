@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>GARBIDUP</title>
+    <link rel="icon" type="image/png" href="assets/item_can.png">
     <style>
         * {
             margin: 0;
@@ -392,30 +393,30 @@
         // OBJECT DICTIONARY
         // ============================================
         const DICTIONARY = {
-            // 3-letter (weights 1-2)
-            'CAN': { weight: 1 }, 'BAG': { weight: 1 }, 'JAR': { weight: 1 },
-            'BOX': { weight: 1 }, 'MUG': { weight: 1 }, 'PAN': { weight: 2 },
-            'CUP': { weight: 1 }, 'LID': { weight: 1 }, 'TOY': { weight: 1 },
-            'RAG': { weight: 1 }, 'WIG': { weight: 1 }, 'HAT': { weight: 1 },
-            'EGG': { weight: 1 }, 'URN': { weight: 2 },
+            // 3-letter
+            'CAN': { weight: 1 }, 'BAG': { weight: 2 }, 'JAR': { weight: 1 },
+            'BOX': { weight: 3 }, 'MUG': { weight: 1 }, 'PAN': { weight: 2 },
+            'CUP': { weight: 1 }, 'LID': { weight: 2 }, 'TOY': { weight: 2 },
+            'RAG': { weight: 1 }, 'WIG': { weight: 2 }, 'HAT': { weight: 1 },
+            'EGG': { weight: 1 }, 'URN': { weight: 4 }, 'GUN': { weight: 4 },
             'BUS': { weight: 8 }, 'CAR': { weight: 8 },
 
-            // 4-letter (weights 1-4)
+            // 4-letter
             'TIRE': { weight: 3 }, 'LAMP': { weight: 2 }, 'BOOK': { weight: 2 },
-            'DRUM': { weight: 3 }, 'PIPE': { weight: 2 }, 'ROPE': { weight: 2 },
-            'VASE': { weight: 2 }, 'TRAY': { weight: 2 }, 'BOWL': { weight: 2 },
-            'CAGE': { weight: 2 }, 'SOCK': { weight: 1 }, 'BOOT': { weight: 2 },
+            'DRUM': { weight: 4 }, 'PIPE': { weight: 2 }, 'ROPE': { weight: 2 },
+            'VASE': { weight: 4 }, 'TRAY': { weight: 2 }, 'BOWL': { weight: 2 },
+            'CAGE': { weight: 4 }, 'SOCK': { weight: 1 }, 'BOOT': { weight: 2 },
             'FORK': { weight: 1 }, 'CLOG': { weight: 2 }, 'GONG': { weight: 3 },
-            'BUST': { weight: 3 }, 'WAND': { weight: 1 }, 'TUBA': { weight: 4 },
-            'POLE': { weight: 3 }, 'SIGN': { weight: 2 }, 'OVEN': { weight: 7 },
-            'SHOE': { weight: 1 }, 'COAT': { weight: 1 }, 'GATE': { weight: 5 },
+            'BUST': { weight: 5 }, 'WAND': { weight: 1 }, 'TUBA': { weight: 6 },
+            'POLE': { weight: 5 }, 'SIGN': { weight: 4 }, 'OVEN': { weight: 7 },
+            'SHOE': { weight: 2 }, 'COAT': { weight: 1 }, 'GATE': { weight: 6 },
             'DOOR': { weight: 5 }, 'DOLL': { weight: 1 },
 
             // 5-letter (weights 1-8)
             'CHAIR': { weight: 4 }, 'CRATE': { weight: 4 }, 'STOOL': { weight: 4 },
             'BRICK': { weight: 5 }, 'PLANT': { weight: 3 }, 'BOARD': { weight: 3 },
             'FRAME': { weight: 3 }, 'CLOCK': { weight: 3 }, 'RADIO': { weight: 3 },
-            'TRUNK': { weight: 5 }, 'SPOON': { weight: 1 },
+            'TRUNK': { weight: 5 }, 'SPOON': { weight: 1 }, 'GLOBE': { weight: 3 },
             'GNOME': { weight: 3 }, 'TIARA': { weight: 2 },
             'SQUID': { weight: 2 }, 'BANJO': { weight: 3 }, 'CROCS': { weight: 2 },
             'ROBOT': { weight: 6 }, 'WATCH': { weight: 1 }, 'PANTS': { weight: 1 },
@@ -432,7 +433,7 @@
             'DRAWER': { weight: 5 }, 'LADDER': { weight: 6 }, 'HEATER': { weight: 6 },
             'BASKET': { weight: 3 }, 'FEDORA': { weight: 2 }, 'TURBAN': { weight: 2 },
             'CACTUS': { weight: 3 }, 'WALLET': { weight: 1 },
-            'SPONGE': { weight: 1 },
+            'SPONGE': { weight: 1 }, 'CANNON': { weight: 6 },
             'ANCHOR': { weight: 8 }, 'PILLAR': { weight: 8 }, 'CAMERA': { weight: 2 },
             'LAPTOP': { weight: 2 }, 'WINDOW': { weight: 4 }, 'BANNER': { weight: 1 },
             'SHIELD': { weight: 4 }, 'MONKEY': { weight: 3 },
@@ -819,8 +820,13 @@
         let wallTexture = null;
         // Grass texture
         let grassTexture = null;
-        // Fish texture
-        let fishTexture = null;
+        // Fish textures
+        let fishLeftTexture = null;
+        let fishRightTexture = null;
+
+        // Boss avatar
+        let bossAvatarImage = null;
+        let bossAvatarNumber = 0;
 
         // Active fish sprites for splash animation
         let activeFish = [];
@@ -859,7 +865,7 @@
             const loader = new THREE.TextureLoader();
             let loadedCount = 0;
             let successCount = 0;
-            const totalToLoad = 12; // 8 trash + 1 ground + 1 grass + 1 wall + 1 fish
+            const totalToLoad = 14; // 8 trash + 1 ground + 1 grass + 1 wall + 2 fish + 1 boss
 
             function checkComplete() {
                 loadedCount++;
@@ -869,6 +875,21 @@
                     if (onComplete) onComplete();
                 }
             }
+
+            // Load boss avatar (pick 1 of 4 randomly for this game)
+            bossAvatarNumber = 1 + Math.floor(Math.random() * 4);
+            const bossPath = getAssetPath(`assets/boss_pfp${bossAvatarNumber}.jpg`);
+            bossAvatarImage = new Image();
+            bossAvatarImage.onload = () => {
+                console.log(`Boss avatar ${bossAvatarNumber} loaded`);
+                checkComplete();
+            };
+            bossAvatarImage.onerror = () => {
+                console.log(`Failed to load boss_pfp${bossAvatarNumber}.jpg`);
+                bossAvatarImage = null;
+                checkComplete();
+            };
+            bossAvatarImage.src = bossPath;
 
             // Load ground texture
             const groundPath = getAssetPath('assets/ground_yard.png');
@@ -924,18 +945,33 @@
                 }
             );
 
-            // Load fish texture
-            const fishPath = getAssetPath('assets/fish.png');
+            // Load fish textures (left and right facing)
+            const fishLeftPath = getAssetPath('assets/fish_left.png');
             loader.load(
-                fishPath,
+                fishLeftPath,
                 (texture) => {
-                    fishTexture = texture;
-                    console.log('Fish texture loaded');
+                    fishLeftTexture = texture;
+                    console.log('Fish left texture loaded');
                     checkComplete();
                 },
                 undefined,
                 (error) => {
-                    console.log('Failed to load fish.png');
+                    console.log('Failed to load fish_left.png');
+                    checkComplete();
+                }
+            );
+
+            const fishRightPath = getAssetPath('assets/fish_right.png');
+            loader.load(
+                fishRightPath,
+                (texture) => {
+                    fishRightTexture = texture;
+                    console.log('Fish right texture loaded');
+                    checkComplete();
+                },
+                undefined,
+                (error) => {
+                    console.log('Failed to load fish_right.png');
                     checkComplete();
                 }
             );
@@ -1110,13 +1146,29 @@
         }
 
         function spawnFishSplash(x, z) {
-            if (!fishTexture) return;
+            if (!fishLeftTexture && !fishRightTexture) return;
 
             const fishCount = 4 + Math.floor(Math.random() * 3); // 4-6 fish
 
             for (let i = 0; i < fishCount; i++) {
+                // Fish starts on one side and jumps to the other side
+                const startsOnLeft = Math.random() < 0.5;
+
+                // Choose texture based on direction AND camera side
+                // From dumpyard: starting left = jumping right = use right-facing fish
+                // From grass side: everything is flipped, so invert the logic
+                let texture;
+                if (cameraMode === 'GRASS') {
+                    // Viewing from grass side - flip the texture choice
+                    texture = startsOnLeft ? fishLeftTexture : fishRightTexture;
+                } else {
+                    // Viewing from dumpyard side
+                    texture = startsOnLeft ? fishRightTexture : fishLeftTexture;
+                }
+                if (!texture) continue; // Skip if texture not loaded
+
                 const material = new THREE.SpriteMaterial({
-                    map: fishTexture,
+                    map: texture,
                     transparent: true,
                     alphaTest: 0.1 // Fix visible square around sprite
                 });
@@ -1126,8 +1178,6 @@
                 const scale = 1.2 + Math.random() * 0.4;
                 fish.scale.set(scale, scale, 1);
 
-                // Fish starts on one side and jumps to the other side
-                const startsOnLeft = Math.random() < 0.5;
                 const lateralOffset = 0.5 + Math.random(); // 1-2 units away
                 const depthOffset = (Math.random() - 0) * 4; // Slight z variation
 
@@ -1137,11 +1187,6 @@
                 const endZ = z + depthOffset + (Math.random() - 0.5) * 2;
 
                 fish.position.set(startX, 0, startZ);
-
-                // Fish faces left by default - flip if starting on right (jumping left)
-                if (!startsOnLeft) {
-                    fish.scale.x = -Math.abs(fish.scale.x);
-                }
 
                 scene.add(fish);
 
@@ -2039,21 +2084,35 @@
             uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
             uiCtx.stroke();
 
-            // Profile picture placeholder - proportional to box height
+            // Profile picture - proportional to box height
             const picSize = Math.floor(boxHeight * 0.65);
             const picMargin = Math.floor(boxHeight * 0.12);
             const picX = boxX + picMargin;
             const picY = boxY + (boxHeight - picSize) / 2; // Vertically center the pic
+            const picRadius = Math.floor(picSize * 0.12);
 
-            uiCtx.fillStyle = 'rgba(80, 100, 120, 0.8)';
-            uiCtx.beginPath();
-            uiCtx.roundRect(picX, picY, picSize, picSize, Math.floor(picSize * 0.12));
-            uiCtx.fill();
+            // Draw boss avatar or placeholder
+            if (bossAvatarImage) {
+                // Clip to rounded rect for the avatar
+                uiCtx.save();
+                uiCtx.beginPath();
+                uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
+                uiCtx.clip();
+                uiCtx.drawImage(bossAvatarImage, picX, picY, picSize, picSize);
+                uiCtx.restore();
+            } else {
+                // Fallback placeholder
+                uiCtx.fillStyle = 'rgba(80, 100, 120, 0.8)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
+                uiCtx.fill();
+            }
 
+            // Border around avatar
             uiCtx.strokeStyle = 'rgba(120, 150, 180, 0.8)';
             uiCtx.lineWidth = 2;
             uiCtx.beginPath();
-            uiCtx.roundRect(picX, picY, picSize, picSize, Math.floor(picSize * 0.12));
+            uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
             uiCtx.stroke();
 
             // "BOSS" title - font size proportional to box
