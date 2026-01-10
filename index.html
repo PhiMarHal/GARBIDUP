@@ -113,8 +113,6 @@
 
             // Scoring
             POINTS_PER_LETTER: 100,
-            SHOT_PENALTY: 50,
-            PERFECT_BONUS: 200,
 
             // UI
             LETTER_SIZE: 30,       // Base size, will be calculated dynamically
@@ -399,7 +397,7 @@
             'BOX': { weight: 1 }, 'MUG': { weight: 1 }, 'PAN': { weight: 2 },
             'CUP': { weight: 1 }, 'LID': { weight: 1 }, 'TOY': { weight: 1 },
             'RAG': { weight: 1 }, 'WIG': { weight: 1 }, 'HAT': { weight: 1 },
-            'BRA': { weight: 1 }, 'EGG': { weight: 1 }, 'URN': { weight: 2 },
+            'EGG': { weight: 1 }, 'URN': { weight: 2 },
             'BUS': { weight: 8 }, 'CAR': { weight: 8 },
 
             // 4-letter (weights 1-4)
@@ -411,19 +409,19 @@
             'BUST': { weight: 3 }, 'WAND': { weight: 1 }, 'TUBA': { weight: 4 },
             'POLE': { weight: 3 }, 'SIGN': { weight: 2 }, 'OVEN': { weight: 7 },
             'SHOE': { weight: 1 }, 'COAT': { weight: 1 }, 'GATE': { weight: 5 },
-            'DOOR': { weight: 5 },
+            'DOOR': { weight: 5 }, 'DOLL': { weight: 1 },
 
             // 5-letter (weights 1-8)
             'CHAIR': { weight: 4 }, 'CRATE': { weight: 4 }, 'STOOL': { weight: 4 },
             'BRICK': { weight: 5 }, 'PLANT': { weight: 3 }, 'BOARD': { weight: 3 },
             'FRAME': { weight: 3 }, 'CLOCK': { weight: 3 }, 'RADIO': { weight: 3 },
             'TRUNK': { weight: 5 }, 'SPORK': { weight: 1 }, 'DECOY': { weight: 2 },
-            'GNOME': { weight: 3 }, 'TIARA': { weight: 2 }, 'KEBAB': { weight: 1 },
+            'GNOME': { weight: 3 }, 'TIARA': { weight: 2 },
             'SQUID': { weight: 2 }, 'BANJO': { weight: 3 }, 'CROCS': { weight: 2 },
             'ROBOT': { weight: 6 }, 'WATCH': { weight: 1 }, 'PANTS': { weight: 1 },
             'JEWEL': { weight: 1 }, 'PLANE': { weight: 8 }, 'DRESS': { weight: 1 },
             'DRYER': { weight: 7 }, 'BOAT': { weight: 4 }, 'PHONE': { weight: 1 },
-            'TOWER': { weight: 8 }, 'CROWN': { weight: 2 }, 'STOVE': { weight: 7 },
+            'TOWER': { weight: 8 }, 'CROWN': { weight: 2 },
             'SWORD': { weight: 3 }, 'TABLE': { weight: 5 }, 'COUCH': { weight: 6 },
             'TRUCK': { weight: 8 }, 'ALIEN': { weight: 2 }, 'DONUT': { weight: 1 },
             'CANOE': { weight: 5 },
@@ -733,7 +731,21 @@
             // Grass (green, from lake end onwards)
             const grassLength = 80;
             const grassGeom = new THREE.BoxGeometry(corridorWidth, 1, grassLength);
-            const grassMat = new THREE.MeshLambertMaterial({ color: 0x3d7a2d });
+
+            let grassMat;
+            if (grassTexture) {
+                // Calculate repeat based on grass size (512x512 texture = ~8 world units)
+                const repeatX = corridorWidth / 8;
+                const repeatZ = grassLength / 8;
+                grassTexture.repeat.set(repeatX, repeatZ);
+                grassMat = new THREE.MeshLambertMaterial({
+                    map: grassTexture,
+                    color: 0xffffff
+                });
+            } else {
+                grassMat = new THREE.MeshLambertMaterial({ color: 0x3d7a2d });
+            }
+
             const grass = new THREE.Mesh(grassGeom, grassMat);
             grass.position.set(0, -0.5, lakeEnd + grassLength / 2);
             scene.add(grass);
@@ -761,17 +773,32 @@
 
             // Side walls/barriers (to make it feel like a corridor)
             const wallHeight = 3;
-            const wallMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+            const wallLength = CONFIG.WORLD_LENGTH;
+
+            let wallMat;
+            if (wallTexture) {
+                // Wall texture is 256x140 (~1.83:1 ratio)
+                // Tile along length, scale height appropriately
+                const repeatX = wallLength / 8; // Repeat along length
+                const repeatY = wallHeight / 4; // Repeat along height
+                wallTexture.repeat.set(repeatX, repeatY);
+                wallMat = new THREE.MeshLambertMaterial({
+                    map: wallTexture,
+                    color: 0xffffff
+                });
+            } else {
+                wallMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+            }
 
             // Left wall
-            const leftWallGeom = new THREE.BoxGeometry(2, wallHeight, CONFIG.WORLD_LENGTH);
+            const leftWallGeom = new THREE.BoxGeometry(2, wallHeight, wallLength);
             const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
-            leftWall.position.set(-corridorWidth / 2 - 1, wallHeight / 2, CONFIG.WORLD_LENGTH / 2 - 20);
+            leftWall.position.set(-corridorWidth / 2 - 1, wallHeight / 2, wallLength / 2 - 20);
             scene.add(leftWall);
 
             // Right wall
             const rightWall = new THREE.Mesh(leftWallGeom, wallMat);
-            rightWall.position.set(corridorWidth / 2 + 1, wallHeight / 2, CONFIG.WORLD_LENGTH / 2 - 20);
+            rightWall.position.set(corridorWidth / 2 + 1, wallHeight / 2, wallLength / 2 - 20);
             scene.add(rightWall);
 
             // Trail line (hidden for now - will be replaced with sprite effects later)
@@ -788,12 +815,51 @@
 
         // Ground texture
         let groundTexture = null;
+        // Wall texture
+        let wallTexture = null;
+        // Grass texture
+        let grassTexture = null;
+        // Fish texture
+        let fishTexture = null;
+
+        // Active fish sprites for splash animation
+        let activeFish = [];
+
+        // Object fade when hitting lake
+        let objectFading = false;
+        let objectFadeStart = 0;
+
+        // Floating score display
+        let floatingScore = null; // { x, y, z, value, startTime }
+
+        // Item sprite textures cache
+        const itemTextures = new Map(); // word -> texture or null (failed) or 'loading'
+        const textureLoader = new THREE.TextureLoader();
+
+        function loadItemTexture(word) {
+            if (itemTextures.has(word)) return; // Already loaded or loading
+
+            itemTextures.set(word, 'loading');
+            const path = getAssetPath(`assets/item_${word.toLowerCase()}.png`);
+
+            textureLoader.load(
+                path,
+                (texture) => {
+                    itemTextures.set(word, texture);
+                    console.log(`Item texture loaded: ${word.toLowerCase()}`);
+                },
+                undefined,
+                (error) => {
+                    itemTextures.set(word, null); // Mark as failed
+                }
+            );
+        }
 
         function loadTextures(onComplete) {
             const loader = new THREE.TextureLoader();
             let loadedCount = 0;
             let successCount = 0;
-            const totalToLoad = 9; // 8 trash + 1 ground
+            const totalToLoad = 12; // 8 trash + 1 ground + 1 grass + 1 wall + 1 fish
 
             function checkComplete() {
                 loadedCount++;
@@ -818,6 +884,58 @@
                 undefined,
                 (error) => {
                     console.log('Failed to load ground_yard.png, using fallback color');
+                    checkComplete();
+                }
+            );
+
+            // Load grass texture
+            const grassPath = getAssetPath('assets/ground_grass.png');
+            loader.load(
+                grassPath,
+                (texture) => {
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    grassTexture = texture;
+                    console.log('Grass texture loaded');
+                    checkComplete();
+                },
+                undefined,
+                (error) => {
+                    console.log('Failed to load ground_grass.png, using fallback color');
+                    checkComplete();
+                }
+            );
+
+            // Load wall texture
+            const wallPath = getAssetPath('assets/wall.png');
+            loader.load(
+                wallPath,
+                (texture) => {
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    wallTexture = texture;
+                    console.log('Wall texture loaded');
+                    checkComplete();
+                },
+                undefined,
+                (error) => {
+                    console.log('Failed to load wall.png, using fallback color');
+                    checkComplete();
+                }
+            );
+
+            // Load fish texture
+            const fishPath = getAssetPath('assets/fish.png');
+            loader.load(
+                fishPath,
+                (texture) => {
+                    fishTexture = texture;
+                    console.log('Fish texture loaded');
+                    checkComplete();
+                },
+                undefined,
+                (error) => {
+                    console.log('Failed to load fish.png');
                     checkComplete();
                 }
             );
@@ -934,17 +1052,19 @@
             const now = performance.now();
             const fadeDuration = 4000; // 4 seconds
 
-            for (const pile of trashPiles) {
-                if (pile.fading && pile.mesh) {
+            for (let i = 0; i < trashPiles.length; i++) {
+                const pile = trashPiles[i];
+                if (!pile.mesh) continue;
+
+                if (pile.fading) {
+                    // Fading out after shot
                     const elapsed = now - pile.fadeStartTime;
                     const progress = Math.min(elapsed / fadeDuration, 1);
                     const opacity = 1 - progress;
 
                     if (pile.isSprite) {
-                        // Sprite - update material opacity
                         pile.mesh.material.opacity = opacity;
                     } else {
-                        // 3D group - update all children's opacity
                         pile.mesh.traverse((child) => {
                             if (child.material) {
                                 child.material.transparent = true;
@@ -959,7 +1079,148 @@
                         scene.remove(pile.mesh);
                         pile.mesh = null;
                     }
+                } else if (i === pendingPileIndex && gameState === 'WORD_BUILDING') {
+                    // Pending pile pulsing animation (100% to 50% opacity)
+                    const pulseSpeed = 3; // oscillations per second
+                    const pulseOpacity = 0.75 + Math.sin(animTime * pulseSpeed) * 0.25; // 0.5 to 1.0
+
+                    if (pile.isSprite) {
+                        pile.mesh.material.opacity = pulseOpacity;
+                    } else {
+                        pile.mesh.traverse((child) => {
+                            if (child.material) {
+                                child.material.transparent = true;
+                                child.material.opacity = pulseOpacity;
+                            }
+                        });
+                    }
+                } else if (!pile.fading && pile.active) {
+                    // Reset opacity for non-pending, non-fading piles
+                    if (pile.isSprite) {
+                        pile.mesh.material.opacity = 1.0;
+                    } else {
+                        pile.mesh.traverse((child) => {
+                            if (child.material) {
+                                child.material.opacity = 1.0;
+                            }
+                        });
+                    }
                 }
+            }
+        }
+
+        function spawnFishSplash(x, z) {
+            if (!fishTexture) return;
+
+            const fishCount = 4 + Math.floor(Math.random() * 3); // 4-6 fish
+
+            for (let i = 0; i < fishCount; i++) {
+                const material = new THREE.SpriteMaterial({
+                    map: fishTexture,
+                    transparent: true,
+                    alphaTest: 0.1 // Fix visible square around sprite
+                });
+                const fish = new THREE.Sprite(material);
+
+                // Fish is 128x128, scale appropriately
+                const scale = 0.8 + Math.random() * 0.4;
+                fish.scale.set(scale, scale, 1);
+
+                // Fish starts on one side and jumps to the other side
+                const startsOnLeft = Math.random() < 0.5;
+                const lateralOffset = 1 + Math.random(); // 1-2 units away
+                const depthOffset = (Math.random() - 0.5) * 3; // Slight z variation
+
+                const startX = startsOnLeft ? (x - lateralOffset) : (x + lateralOffset);
+                const endX = startsOnLeft ? (x + lateralOffset) : (x - lateralOffset);
+                const startZ = z + depthOffset;
+                const endZ = z + depthOffset + (Math.random() - 0.5) * 2;
+
+                fish.position.set(startX, 0, startZ);
+
+                // Fish faces left by default - flip if starting on right (jumping left)
+                if (!startsOnLeft) {
+                    fish.scale.x = -Math.abs(fish.scale.x);
+                }
+
+                scene.add(fish);
+
+                // Store fish data for animation
+                activeFish.push({
+                    mesh: fish,
+                    startX: startX,
+                    startZ: startZ,
+                    endX: endX,
+                    endZ: endZ,
+                    jumpHeight: 0.5 + Math.random() * 0.5, // Lower jump
+                    duration: 200 + Math.random() * 200, // Faster
+                    startTime: performance.now() + i * 60, // Stagger spawns
+                    phase: 'waiting'
+                });
+            }
+        }
+
+        function updateFishAnimation() {
+            const now = performance.now();
+
+            for (let i = activeFish.length - 1; i >= 0; i--) {
+                const fish = activeFish[i];
+
+                if (fish.phase === 'waiting') {
+                    if (now >= fish.startTime) {
+                        fish.phase = 'jumping';
+                        fish.jumpStartTime = now;
+                    }
+                    continue;
+                }
+
+                if (fish.phase === 'jumping') {
+                    const elapsed = now - fish.jumpStartTime;
+                    const progress = Math.min(elapsed / fish.duration, 1);
+
+                    // Parabolic arc - highest at middle
+                    const arcProgress = progress * 2 - 1; // -1 to 1
+                    const height = fish.jumpHeight * (1 - arcProgress * arcProgress);
+
+                    // Linear interpolation from start to end
+                    const x = fish.startX + (fish.endX - fish.startX) * progress;
+                    const z = fish.startZ + (fish.endZ - fish.startZ) * progress;
+
+                    fish.mesh.position.set(x, height, z);
+
+                    // Slight rotation based on arc (tilt up going up, down going down)
+                    fish.mesh.material.rotation = -arcProgress * 0.4;
+
+                    if (progress >= 1) {
+                        fish.phase = 'done';
+                        scene.remove(fish.mesh);
+                        activeFish.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function updateObjectFade() {
+            if (!objectFading || !objectMesh) return;
+
+            const now = performance.now();
+            const fadeDuration = 1500; // 1.5 seconds
+            const elapsed = now - objectFadeStart;
+            const progress = Math.min(elapsed / fadeDuration, 1);
+
+            // Fade and sink
+            objectMesh.traverse((child) => {
+                if (child.material) {
+                    child.material.transparent = true;
+                    child.material.opacity = 1 - progress;
+                }
+            });
+            objectMesh.position.y = 0.5 - progress * 2; // Sink into water
+
+            if (progress >= 1) {
+                scene.remove(objectMesh);
+                objectMesh = null;
+                objectFading = false;
             }
         }
 
@@ -969,7 +1230,32 @@
                 scene.remove(objectMesh);
             }
 
-            // Create irregular triangular prism
+            // Try to use item sprite if available
+            const texture = itemTextures.get(word);
+            if (texture && texture !== 'loading' && texture !== null) {
+                // Use sprite with proper aspect ratio
+                const material = new THREE.SpriteMaterial({
+                    map: texture,
+                    transparent: true,
+                    alphaTest: 0.1
+                });
+                objectMesh = new THREE.Sprite(material);
+
+                // Scale based on weight (50% larger than before)
+                // Base scale around 3 units, increasing with weight
+                const baseScale = 2.25 + weight * 0.225;
+
+                // Use texture's natural aspect ratio
+                const imgWidth = texture.image.width;
+                const imgHeight = texture.image.height;
+                const aspectRatio = imgWidth / imgHeight;
+
+                objectMesh.scale.set(baseScale * aspectRatio, baseScale, 1);
+                scene.add(objectMesh);
+                return objectMesh;
+            }
+
+            // Fallback: Create irregular triangular prism
             const size = 0.8 + weight * 0.1;
             const shape = new THREE.Shape();
             shape.moveTo(-size, -size * 0.5);
@@ -1269,6 +1555,8 @@
             // Play sound when word becomes valid
             if (isValid && !lastWordValid) {
                 playWordFound();
+                // Preload item texture for this word
+                loadItemTexture(word);
             }
             lastWordValid = isValid;
 
@@ -1335,6 +1623,58 @@
             if (gameState === 'VICTORY') {
                 renderVictoryScreen();
             }
+
+            // Floating score display
+            renderFloatingScore();
+        }
+
+        function renderFloatingScore() {
+            if (!floatingScore) return;
+
+            const now = performance.now();
+            const elapsed = now - floatingScore.startTime;
+            const duration = 1500; // 1.5 seconds
+            const progress = elapsed / duration;
+
+            if (progress >= 1) {
+                floatingScore = null;
+                return;
+            }
+
+            // Project 3D position to 2D screen coordinates
+            const pos3D = new THREE.Vector3(
+                floatingScore.x,
+                floatingScore.y + progress * 3, // Rise upward
+                floatingScore.z
+            );
+            pos3D.project(camera);
+
+            // Convert from normalized device coordinates to screen coordinates
+            const screenX = (pos3D.x + 1) / 2 * CONFIG.WIDTH;
+            const screenY = (1 - pos3D.y) / 2 * CONFIG.HEIGHT;
+
+            // Don't render if behind camera
+            if (pos3D.z > 1) return;
+
+            // Fade out
+            const opacity = 1 - progress;
+
+            // Draw floating score
+            const fontSize = Math.max(24, Math.floor(CONFIG.WIDTH * 0.08));
+            const text = '+' + floatingScore.value;
+
+            uiCtx.font = `bold ${fontSize}px Arial`;
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+
+            // Black outline
+            uiCtx.strokeStyle = `rgba(0, 0, 0, ${opacity})`;
+            uiCtx.lineWidth = 3;
+            uiCtx.strokeText(text, screenX, screenY);
+
+            // Gold fill
+            uiCtx.fillStyle = `rgba(255, 215, 0, ${opacity})`;
+            uiCtx.fillText(text, screenX, screenY);
         }
 
         function renderTopScore() {
@@ -1591,9 +1931,11 @@
             uiCtx.font = `bold ${labelFontSize}px Arial`;
             uiCtx.textAlign = 'left';
             uiCtx.textBaseline = 'middle';
-            uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-            uiCtx.fillText('TIDINESS', startX + 1, squareY - squareSize * 0.7 + 1);
-            uiCtx.fillStyle = '#CCC';
+            // Strong black outline
+            uiCtx.strokeStyle = 'black';
+            uiCtx.lineWidth = 2;
+            uiCtx.strokeText('TIDINESS', startX, squareY - squareSize * 0.7);
+            uiCtx.fillStyle = '#FFD700'; // Gold like score
             uiCtx.fillText('TIDINESS', startX, squareY - squareSize * 0.7);
 
             // "WEIGHT X" label - right aligned at same level as TIDINESS
@@ -1613,9 +1955,11 @@
                 uiCtx.font = `bold ${labelFontSize}px Arial`;
                 uiCtx.textAlign = 'right';
                 uiCtx.textBaseline = 'middle';
-                uiCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                uiCtx.fillText(weightText, endX + 1, squareY - squareSize * 0.7 + 1);
-                uiCtx.fillStyle = '#CCC';
+                // Strong black outline
+                uiCtx.strokeStyle = 'black';
+                uiCtx.lineWidth = 2;
+                uiCtx.strokeText(weightText, endX, squareY - squareSize * 0.7);
+                uiCtx.fillStyle = '#FFD700'; // Gold like score
                 uiCtx.fillText(weightText, endX, squareY - squareSize * 0.7);
             }
 
@@ -2387,6 +2731,8 @@
 
             // Update trash pile fade animations
             updatePileFades();
+            updateFishAnimation();
+            updateObjectFade();
 
             // Dialog animation
             if (dialogActive && dialogLines.length > 0) {
@@ -2515,8 +2861,16 @@
                 // Update mesh
                 if (objectMesh) {
                     objectMesh.position.set(currentObject.x, currentObject.y, currentObject.z);
-                    objectMesh.rotation.z = currentObject.rotation;
-                    objectMesh.rotation.x = currentObject.rotation * 0.5;
+
+                    // Apply rotation - different for sprites vs meshes
+                    if (objectMesh.isSprite) {
+                        // Sprites use material.rotation for 2D spin
+                        objectMesh.material.rotation = currentObject.rotation;
+                    } else {
+                        // 3D meshes use object rotation
+                        objectMesh.rotation.z = currentObject.rotation;
+                        objectMesh.rotation.x = currentObject.rotation * 0.5;
+                    }
                 }
 
                 // Camera follows object - directly behind
@@ -2554,8 +2908,13 @@
 
                     if (currentObject.z >= lakeStart && currentObject.z <= lakeEnd) {
                         playWaterSplash();
+                        // Spawn fish splash animation
+                        spawnFishSplash(currentObject.x, currentObject.z);
+                        // Start object fade
+                        objectFading = true;
+                        objectFadeStart = performance.now();
                         handleSuccess();
-                        return; // Exit update - currentObject is now null
+                        return; // Exit update
                     } else if (currentObject.z < lakeStart) {
                         // Landed short - stay here, shoot toward lake
                         playThumpItem();
@@ -2579,13 +2938,26 @@
 
         function handleSuccess() {
             const thrownWord = currentObject.word; // Store before clearing
+            const objectX = currentObject.x;
+            const objectY = currentObject.y;
+            const objectZ = currentObject.z;
+
             const wordPoints = thrownWord.length * CONFIG.POINTS_PER_LETTER;
-            const shotPenalty = (shotsTaken - 1) * CONFIG.SHOT_PENALTY;
-            const bonus = shotsTaken === 1 ? CONFIG.PERFECT_BONUS : 0;
-            const earnedPoints = Math.max(0, wordPoints - shotPenalty + bonus);
+            // Score reduces by 1/3 with each shot (multiply by 2/3)
+            const shotMultiplier = Math.pow(2 / 3, shotsTaken - 1);
+            const earnedPoints = Math.round(wordPoints * shotMultiplier);
 
             score += earnedPoints;
             pilesCleared++;
+
+            // Spawn floating score display
+            floatingScore = {
+                x: objectX,
+                y: objectY + 1,
+                z: objectZ,
+                value: earnedPoints,
+                startTime: performance.now()
+            };
 
             // Mark pile as inactive (it's already fading from when item was thrown)
             if (activePileIndex >= 0 && trashPiles[activePileIndex]) {
@@ -2594,11 +2966,7 @@
                 // Don't remove mesh here - it's fading out gracefully
             }
 
-            // Remove object
-            if (objectMesh) {
-                scene.remove(objectMesh);
-                objectMesh = null;
-            }
+            // Don't remove object mesh here - it's fading into the water with fish animation
 
             trailPoints = [];
             updateTrail();
@@ -2715,6 +3083,13 @@
             hasShownShootHint = false;
             lastWordValid = false;
             gameWords = []; // Reset so new words are selected for new game
+            floatingScore = null;
+            objectFading = false;
+            // Clean up any active fish
+            for (const fish of activeFish) {
+                if (fish.mesh) scene.remove(fish.mesh);
+            }
+            activeFish = [];
 
             if (objectMesh) {
                 scene.remove(objectMesh);
