@@ -126,6 +126,271 @@
         };
 
         // ============================================
+        // ASSET LOADING
+        // ============================================
+        const BASE_URL = 'https://garbidup.loiyaa.com/';
+
+        function getAssetPath(relativePath) {
+            // Check if running locally (file:// or localhost)
+            const isLocal = window.location.protocol === 'file:' ||
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
+
+            if (isLocal) {
+                return relativePath;
+            } else {
+                return BASE_URL + relativePath;
+            }
+        }
+
+        // ============================================
+        // MUSIC SYSTEM
+        // ============================================
+        const TRACK_COUNT = 8;
+        const MUSIC_VOLUME = 0.2; // 20% volume
+        let currentAudio = null;
+        let nextAudio = null;
+        let playedTracks = [];
+        let currentTrackIndex = -1;
+        let musicStarted = false;
+        let preloadTimeout = null;
+        let isTabVisible = true;
+
+        function getRandomUnplayedTrack() {
+            // If all tracks played, reset the list
+            if (playedTracks.length >= TRACK_COUNT) {
+                playedTracks = [];
+            }
+
+            // Get available tracks
+            const available = [];
+            for (let i = 1; i <= TRACK_COUNT; i++) {
+                if (!playedTracks.includes(i)) {
+                    available.push(i);
+                }
+            }
+
+            // Pick random from available
+            const randomIndex = Math.floor(Math.random() * available.length);
+            return available[randomIndex];
+        }
+
+        function getTrackPath(trackNum) {
+            const paddedNum = trackNum.toString().padStart(2, '0');
+            return getAssetPath(`assets/track_${paddedNum}.mp3`);
+        }
+
+        function preloadNextTrack() {
+            const nextTrackNum = getRandomUnplayedTrack();
+            nextAudio = new Audio();
+            nextAudio.src = getTrackPath(nextTrackNum);
+            nextAudio.load();
+            nextAudio.volume = (isMuted || !isTabVisible) ? 0 : MUSIC_VOLUME;
+
+            // Store which track this is
+            nextAudio.trackNum = nextTrackNum;
+        }
+
+        function playNextTrack() {
+            // Don't start new tracks when tab is hidden
+            if (!isTabVisible) {
+                // Queue to play when tab becomes visible
+                return;
+            }
+
+            // If we have a preloaded track, use it
+            if (nextAudio) {
+                currentAudio = nextAudio;
+                nextAudio = null;
+            } else {
+                // Load a new track
+                const trackNum = getRandomUnplayedTrack();
+                currentAudio = new Audio();
+                currentAudio.src = getTrackPath(trackNum);
+                currentAudio.trackNum = trackNum;
+            }
+
+            // Mark track as played
+            playedTracks.push(currentAudio.trackNum);
+            currentTrackIndex = currentAudio.trackNum;
+
+            // Set volume based on mute state and tab visibility
+            currentAudio.volume = (isMuted || !isTabVisible) ? 0 : MUSIC_VOLUME;
+
+            // Play the track
+            currentAudio.play().catch(e => {
+                // Autoplay blocked - will try again on user interaction
+                console.log('Music autoplay blocked, will retry on interaction');
+            });
+
+            // When track ends, play next
+            currentAudio.onended = () => {
+                playNextTrack();
+            };
+
+            // Preload next track 2 minutes after this one starts
+            if (preloadTimeout) {
+                clearTimeout(preloadTimeout);
+            }
+            preloadTimeout = setTimeout(() => {
+                preloadNextTrack();
+            }, 2 * 60 * 1000); // 2 minutes
+        }
+
+        function startMusic() {
+            if (musicStarted) return;
+            musicStarted = true;
+            playNextTrack();
+        }
+
+        function setMusicMuted(muted) {
+            if (currentAudio) {
+                currentAudio.volume = (muted || !isTabVisible) ? 0 : MUSIC_VOLUME;
+            }
+            if (nextAudio) {
+                nextAudio.volume = (muted || !isTabVisible) ? 0 : MUSIC_VOLUME;
+            }
+        }
+
+        // Pause everything when tab is not visible
+        document.addEventListener('visibilitychange', () => {
+            isTabVisible = !document.hidden;
+            if (!isTabVisible) {
+                // Mute and pause music
+                if (currentAudio) {
+                    currentAudio.volume = 0;
+                    currentAudio.pause();
+                }
+            } else {
+                // Reset lastUpdateTime to avoid huge deltaTime on resume
+                lastUpdateTime = 0;
+
+                // Resume music
+                if (currentAudio && musicStarted) {
+                    if (!isMuted) currentAudio.volume = MUSIC_VOLUME;
+                    currentAudio.play().catch(() => { });
+                }
+            }
+        });
+
+        // ============================================
+        // SOUND EFFECTS
+        // ============================================
+        const typeBlips = [];
+        let wordFoundSound = null;
+        let letterFlowSound = null;
+        let openDictionarySound = null;
+        let waterSplashSound = null;
+        let throwItemSound = null;
+        let letterClickSound = null;
+        let thumpItemSound = null;
+
+        function initSoundEffects() {
+            // Preload type blip sounds
+            for (let i = 1; i <= 3; i++) {
+                const audio = new Audio();
+                audio.src = getAssetPath(`assets/type_blip${i}.mp3`);
+                audio.load();
+                typeBlips.push(audio);
+            }
+
+            // Preload word found sound
+            wordFoundSound = new Audio();
+            wordFoundSound.src = getAssetPath('assets/word_found.mp3');
+            wordFoundSound.load();
+
+            // Preload letter flow sound
+            letterFlowSound = new Audio();
+            letterFlowSound.src = getAssetPath('assets/letter_flow.mp3');
+            letterFlowSound.load();
+
+            // Preload dictionary open sound
+            openDictionarySound = new Audio();
+            openDictionarySound.src = getAssetPath('assets/open_dictionary.mp3');
+            openDictionarySound.load();
+
+            // Preload water splash sound
+            waterSplashSound = new Audio();
+            waterSplashSound.src = getAssetPath('assets/water_splash.mp3');
+            waterSplashSound.load();
+
+            // Preload throw item sound
+            throwItemSound = new Audio();
+            throwItemSound.src = getAssetPath('assets/throw_item.mp3');
+            throwItemSound.load();
+
+            // Preload letter click sound
+            letterClickSound = new Audio();
+            letterClickSound.src = getAssetPath('assets/letter_click.mp3');
+            letterClickSound.load();
+
+            // Preload thump item sound
+            thumpItemSound = new Audio();
+            thumpItemSound.src = getAssetPath('assets/thump_item.mp3');
+            thumpItemSound.load();
+        }
+
+        function playTypeBlip() {
+            if (isMuted || !isTabVisible) return;
+            const blip = typeBlips[Math.floor(Math.random() * typeBlips.length)];
+            if (blip) {
+                // Clone the audio to allow overlapping plays
+                const sound = blip.cloneNode();
+                sound.volume = 0.5;
+                sound.play().catch(() => { });
+            }
+        }
+
+        function playWordFound() {
+            if (isMuted || !isTabVisible || !wordFoundSound) return;
+            const sound = wordFoundSound.cloneNode();
+            sound.volume = 0.7;
+            sound.play().catch(() => { });
+        }
+
+        function playLetterFlow() {
+            if (isMuted || !isTabVisible || !letterFlowSound) return;
+            const sound = letterFlowSound.cloneNode();
+            sound.volume = 0.6;
+            sound.play().catch(() => { });
+        }
+
+        function playOpenDictionary() {
+            if (isMuted || !isTabVisible || !openDictionarySound) return;
+            const sound = openDictionarySound.cloneNode();
+            sound.volume = 0.6;
+            sound.play().catch(() => { });
+        }
+
+        function playWaterSplash() {
+            if (isMuted || !isTabVisible || !waterSplashSound) return;
+            const sound = waterSplashSound.cloneNode();
+            sound.volume = 0.8;
+            sound.play().catch(() => { });
+        }
+
+        function playThrowItem() {
+            if (isMuted || !isTabVisible || !throwItemSound) return;
+            const sound = throwItemSound.cloneNode();
+            sound.volume = 0.7;
+            sound.play().catch(() => { });
+        }
+
+        function playLetterClick() {
+            if (isMuted || !isTabVisible || !letterClickSound) return;
+            const sound = letterClickSound.cloneNode();
+            sound.volume = 0.5;
+            sound.play().catch(() => { });
+        }
+
+        function playThumpItem() {
+            if (isMuted || !isTabVisible || !thumpItemSound) return;
+            const sound = thumpItemSound.cloneNode();
+            sound.volume = 0.7;
+            sound.play().catch(() => { });
+        }
+
+        // ============================================
         // OBJECT DICTIONARY
         // ============================================
         const DICTIONARY = {
@@ -228,6 +493,12 @@
         // Audio state (for future sound implementation)
         let isMuted = false;
 
+        // Track word validity for sound effect
+        let lastWordValid = false;
+
+        // Track if we've shown the shoot hint
+        let hasShownShootHint = false;
+
         // Player name (from Remix SDK or default)
         let playerName = 'Newbie';
 
@@ -264,7 +535,7 @@
             // Handle mute/unmute requests from Remix
             window.FarcadeSDK.on('toggle_mute', (data) => {
                 isMuted = data.isMuted;
-                // Future: apply mute to audio elements here
+                setMusicMuted(isMuted);
             });
         }
 
@@ -810,6 +1081,7 @@
             letters[index].selected = true;
             letters[index].animating = true;
             selectedOrder.push(index);
+            playLetterClick();
             updateWordPositions();
             updatePendingPile();
         }
@@ -825,14 +1097,22 @@
             // Remove from selectedOrder
             selectedOrder.splice(orderPos, 1);
 
+            playLetterClick();
             updateWordPositions();
             updatePendingPile();
         }
 
         function updatePendingPile() {
             const word = getSelectedWord();
+            const isValid = isValidWord(word);
 
-            if (isValidWord(word)) {
+            // Play sound when word becomes valid
+            if (isValid && !lastWordValid) {
+                playWordFound();
+            }
+            lastWordValid = isValid;
+
+            if (isValid) {
                 // Find an active pile to preview
                 const activePiles = trashPiles.map((p, i) => ({ pile: p, index: i })).filter(p => p.pile.active);
                 if (activePiles.length > 0) {
@@ -1210,6 +1490,27 @@
                     uiCtx.fill();
                 }
             }
+
+            // Show "SLIDE DOWN TO SHOOT" hint on first shot
+            if (gameState === 'FLING' && shotsTaken === 0 && !hasShownShootHint) {
+                const hintFontSize = Math.max(14, Math.floor(CONFIG.WIDTH * 0.045));
+                const hintY = squareY - squareSize * 1.8;
+
+                // Pulsing opacity
+                const pulseAlpha = 0.6 + Math.sin(animTime * 3) * 0.3;
+
+                uiCtx.font = `bold ${hintFontSize}px Arial`;
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+
+                // Shadow
+                uiCtx.fillStyle = `rgba(0, 0, 0, ${pulseAlpha * 0.5})`;
+                uiCtx.fillText('⬇ SLIDE DOWN TO SHOOT ⬇', CONFIG.WIDTH / 2 + 1, hintY + 1);
+
+                // Text
+                uiCtx.fillStyle = `rgba(255, 200, 100, ${pulseAlpha})`;
+                uiCtx.fillText('⬇ SLIDE DOWN TO SHOOT ⬇', CONFIG.WIDTH / 2, hintY);
+            }
         }
 
         function renderDialogBox() {
@@ -1296,8 +1597,9 @@
                 // Limit to 2 lines max
                 lines = lines.slice(0, 2);
 
-                // Draw each line
-                const dialogStartY = textStartY + titleFontSize + 4;
+                // Draw each line - add a bit more gap below BOSS title
+                const titleGap = Math.max(9, Math.floor(boxHeight * 0.09));
+                const dialogStartY = textStartY + titleFontSize + titleGap;
                 lines.forEach((line, index) => {
                     uiCtx.fillText(line, textX, dialogStartY + index * lineHeight);
                 });
@@ -1604,6 +1906,9 @@
         function handlePointerStart(event) {
             const pos = getCanvasCoords(event);
 
+            // Start music on first interaction (avoids autoplay blocking)
+            startMusic();
+
             // During dialog, tapping advances or skips
             if (dialogActive && (gameState === 'INTRO' || gameState === 'TRANSITIONING')) {
                 // If line is still typing, complete it instantly
@@ -1642,6 +1947,7 @@
             if (pos.x >= dictBtnX && pos.x <= dictBtnX + dictBtnWidth &&
                 pos.y >= dictBtnY && pos.y <= dictBtnY + dictBtnHeight) {
                 showDictionary = !showDictionary; // Toggle dictionary
+                playOpenDictionary();
                 return;
             }
 
@@ -1892,6 +2198,8 @@
 
             trailPoints = [];
             shotsTaken++;
+            hasShownShootHint = true; // Hide the hint after first shot
+            playThrowItem();
             gameState = 'FLYING';
         }
 
@@ -1901,6 +2209,11 @@
         let lastUpdateTime = 0;
 
         function update() {
+            // Skip updates when tab is hidden
+            if (!isTabVisible) {
+                return;
+            }
+
             const now = performance.now();
             const deltaTime = lastUpdateTime ? now - lastUpdateTime : 16;
             lastUpdateTime = now;
@@ -1916,6 +2229,11 @@
                         if (dialogCharTimer >= DIALOG_CHAR_SPEED) {
                             dialogCharTimer = 0;
                             currentDialogChar++;
+                            // Play type blip for non-space characters
+                            const char = currentLine[currentDialogChar - 1];
+                            if (char && char !== ' ') {
+                                playTypeBlip();
+                            }
                         }
                     } else {
                         // Line complete, wait then advance
@@ -1948,6 +2266,7 @@
                     letterAnimationTimer = 0;
                     const letterIndex = letterAnimationQueue.shift();
                     letters[letterIndex].revealed = true;
+                    playLetterFlow();
 
                     // If all letters revealed, start game
                     if (letterAnimationQueue.length === 0) {
@@ -2064,10 +2383,12 @@
                     const lakeEnd = CONFIG.LAKE_Z + CONFIG.LAKE_WIDTH / 2;
 
                     if (currentObject.z >= lakeStart && currentObject.z <= lakeEnd) {
+                        playWaterSplash();
                         handleSuccess();
                         return; // Exit update - currentObject is now null
                     } else if (currentObject.z < lakeStart) {
                         // Landed short - stay here, shoot toward lake
+                        playThumpItem();
                         cameraMode = 'DUMPYARD';
                         trailPoints = [];
                         updateTrail();
@@ -2075,6 +2396,7 @@
                         gameState = 'FLING';
                     } else if (currentObject.z > lakeEnd) {
                         // Overshot - stay here, shoot back toward lake
+                        playThumpItem();
                         cameraMode = 'GRASS';
                         trailPoints = [];
                         updateTrail();
@@ -2218,6 +2540,8 @@
             pendingPileIndex = -1;
             showDictionary = false;
             cameraMode = 'DUMPYARD';
+            hasShownShootHint = false;
+            lastWordValid = false;
 
             if (objectMesh) {
                 scene.remove(objectMesh);
@@ -2245,6 +2569,7 @@
             initThree();
             initUI();
             initInput();
+            initSoundEffects();
             initRemixSDK();
             handleResize(); // Initial sizing
             resetGame();
