@@ -698,21 +698,6 @@
             dumpGround.position.set(0, -0.5, (lakeStart - 10) / 2);
             scene.add(dumpGround);
 
-            // Add some dirt texture variation with smaller boxes
-            for (let i = 0; i < 40; i++) {
-                const size = 2 + Math.random() * 4;
-                const dirtGeom = new THREE.BoxGeometry(size, 0.3, size);
-                const shade = 0x3a2718 + Math.floor(Math.random() * 0x101010);
-                const dirtMat = new THREE.MeshLambertMaterial({ color: shade });
-                const dirt = new THREE.Mesh(dirtGeom, dirtMat);
-                dirt.position.set(
-                    (Math.random() - 0.5) * (corridorWidth - 5),
-                    0.01,
-                    Math.random() * (lakeStart - 5)
-                );
-                scene.add(dirt);
-            }
-
             // Lake (blue)
             const lakeGeom = new THREE.BoxGeometry(corridorWidth, 0.5, lakeWidth);
             const lakeMat = new THREE.MeshLambertMaterial({ color: 0x2e86ab });
@@ -739,19 +724,6 @@
             const grass = new THREE.Mesh(grassGeom, grassMat);
             grass.position.set(0, -0.5, lakeEnd + grassLength / 2);
             scene.add(grass);
-
-            // Some grass tufts
-            for (let i = 0; i < 30; i++) {
-                const tuftGeom = new THREE.BoxGeometry(0.5, 1 + Math.random(), 0.5);
-                const tuftMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-                const tuft = new THREE.Mesh(tuftGeom, tuftMat);
-                tuft.position.set(
-                    (Math.random() - 0.5) * (corridorWidth - 5),
-                    0.5,
-                    lakeEnd + 5 + Math.random() * (grassLength - 10)
-                );
-                scene.add(tuft);
-            }
 
             // Distant trees (simple boxes) - at the far end
             for (let i = 0; i < 8; i++) {
@@ -797,6 +769,42 @@
             trailLine = null;
         }
 
+        // Trash pile sprites
+        const trashTextures = [];
+        let trashTexturesLoaded = false;
+
+        function loadTrashTextures(onComplete) {
+            const loader = new THREE.TextureLoader();
+            let loadedCount = 0;
+            let successCount = 0;
+
+            function checkComplete() {
+                loadedCount++;
+                if (loadedCount === 8) {
+                    console.log(`Trash textures: ${successCount}/8 loaded successfully`);
+                    trashTexturesLoaded = successCount > 0;
+                    if (onComplete) onComplete();
+                }
+            }
+
+            for (let i = 1; i <= 8; i++) {
+                const path = getAssetPath(`assets/trash_${i}.png`);
+                loader.load(
+                    path,
+                    (texture) => {
+                        trashTextures[i - 1] = texture;
+                        successCount++;
+                        checkComplete();
+                    },
+                    undefined,
+                    (error) => {
+                        console.log(`Failed to load trash_${i}.png, using fallback`);
+                        checkComplete();
+                    }
+                );
+            }
+        }
+
         function createTrashPiles() {
             // Remove old piles
             trashPiles.forEach(pile => {
@@ -809,41 +817,113 @@
 
             for (let i = 0; i < CONFIG.PILE_COUNT; i++) {
                 // Spread piles along the dumpyard (from z=5 to just before lake)
-                const z = 5 + (i / CONFIG.PILE_COUNT) * (lakeStart - 15);
-                const x = (Math.random() - 0.5) * maxX * 2;
+                // Use a more varied distribution
+                const row = Math.floor(i / 4); // 4 piles per row, 4 rows
+                const col = i % 4;
+                const rowZ = 8 + row * ((lakeStart - 20) / 4);
+                const z = rowZ + (Math.random() - 0.5) * 8;
+                const colX = (col - 1.5) * (maxX * 0.5);
+                const x = colX + (Math.random() - 0.5) * 4;
 
-                // Create pile mesh (irregular stack of boxes)
-                const pileGroup = new THREE.Group();
+                let pileMesh;
+                const spriteIndex = i % 8; // Cycle through 8 sprites
 
-                const baseSize = 1.5 + Math.random();
-                for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
-                    const boxSize = baseSize * (1 - j * 0.2);
-                    const boxGeom = new THREE.BoxGeometry(
-                        boxSize + Math.random() * 0.5,
-                        boxSize * 0.6,
-                        boxSize + Math.random() * 0.5
-                    );
-                    const shade = 0x3a2a1a + Math.floor(Math.random() * 0x151515);
-                    const boxMat = new THREE.MeshLambertMaterial({ color: shade });
-                    const box = new THREE.Mesh(boxGeom, boxMat);
-                    box.position.set(
-                        (Math.random() - 0.5) * 0.5,
-                        j * boxSize * 0.5 + boxSize * 0.3,
-                        (Math.random() - 0.5) * 0.5
-                    );
-                    box.rotation.y = Math.random() * 0.5;
-                    pileGroup.add(box);
+                // Try to use sprite, fall back to 3D blocks
+                if (trashTexturesLoaded && trashTextures[spriteIndex]) {
+                    // Create billboard sprite
+                    const material = new THREE.SpriteMaterial({
+                        map: trashTextures[spriteIndex],
+                        transparent: true,
+                        opacity: 1.0
+                    });
+                    pileMesh = new THREE.Sprite(material);
+                    // Sprites are ~256x120 (2:1 ratio width:height)
+                    const scaleHeight = 2 + Math.random() * 1.5; // Random height variation
+                    const scaleWidth = scaleHeight * 2.1; // Maintain ~2:1 aspect ratio
+                    pileMesh.scale.set(scaleWidth, scaleHeight, 1);
+                    pileMesh.position.set(x, scaleHeight / 2, z);
+                    if (i === 0) console.log('Creating sprite-based trash piles');
+                } else {
+                    // Fallback: Create pile mesh (irregular stack of boxes)
+                    if (i === 0) console.log('Creating fallback 3D trash piles (textures not loaded)');
+                    const pileGroup = new THREE.Group();
+
+                    const baseSize = 1.5 + Math.random();
+                    for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
+                        const boxSize = baseSize * (1 - j * 0.2);
+                        const boxGeom = new THREE.BoxGeometry(
+                            boxSize + Math.random() * 0.5,
+                            boxSize * 0.6,
+                            boxSize + Math.random() * 0.5
+                        );
+                        const shade = 0x3a2a1a + Math.floor(Math.random() * 0x151515);
+                        const boxMat = new THREE.MeshLambertMaterial({ color: shade });
+                        const box = new THREE.Mesh(boxGeom, boxMat);
+                        box.position.set(
+                            (Math.random() - 0.5) * 0.5,
+                            j * boxSize * 0.5 + boxSize * 0.3,
+                            (Math.random() - 0.5) * 0.5
+                        );
+                        box.rotation.y = Math.random() * 0.5;
+                        pileGroup.add(box);
+                    }
+
+                    pileGroup.position.set(x, 0, z);
+                    pileMesh = pileGroup;
                 }
 
-                pileGroup.position.set(x, 0, z);
-                scene.add(pileGroup);
+                scene.add(pileMesh);
 
                 trashPiles.push({
                     x: x,
                     z: z,
-                    mesh: pileGroup,
-                    active: true
+                    mesh: pileMesh,
+                    active: true,
+                    fading: false,
+                    fadeStartTime: 0,
+                    isSprite: trashTexturesLoaded && trashTextures[spriteIndex]
                 });
+            }
+        }
+
+        function startPileFade(pileIndex) {
+            if (pileIndex >= 0 && trashPiles[pileIndex]) {
+                const pile = trashPiles[pileIndex];
+                pile.fading = true;
+                pile.fadeStartTime = performance.now();
+            }
+        }
+
+        function updatePileFades() {
+            const now = performance.now();
+            const fadeDuration = 4000; // 4 seconds
+
+            for (const pile of trashPiles) {
+                if (pile.fading && pile.mesh) {
+                    const elapsed = now - pile.fadeStartTime;
+                    const progress = Math.min(elapsed / fadeDuration, 1);
+                    const opacity = 1 - progress;
+
+                    if (pile.isSprite) {
+                        // Sprite - update material opacity
+                        pile.mesh.material.opacity = opacity;
+                    } else {
+                        // 3D group - update all children's opacity
+                        pile.mesh.traverse((child) => {
+                            if (child.material) {
+                                child.material.transparent = true;
+                                child.material.opacity = opacity;
+                            }
+                        });
+                    }
+
+                    // Remove when fully faded
+                    if (progress >= 1) {
+                        pile.fading = false;
+                        scene.remove(pile.mesh);
+                        pile.mesh = null;
+                    }
+                }
             }
         }
 
@@ -2243,6 +2323,12 @@
 
             trailPoints = [];
             shotsTaken++;
+
+            // Start fading the trash pile on first shot (player has committed)
+            if (shotsTaken === 1) {
+                startPileFade(activePileIndex);
+            }
+
             hasShownShootHint = true; // Hide the hint after first shot
             playThrowItem();
             gameState = 'FLYING';
@@ -2262,6 +2348,9 @@
             const now = performance.now();
             const deltaTime = lastUpdateTime ? now - lastUpdateTime : 16;
             lastUpdateTime = now;
+
+            // Update trash pile fade animations
+            updatePileFades();
 
             // Dialog animation
             if (dialogActive && dialogLines.length > 0) {
@@ -2462,13 +2551,11 @@
             score += earnedPoints;
             pilesCleared++;
 
-            // Remove pile
+            // Mark pile as inactive (it's already fading from when item was thrown)
             if (activePileIndex >= 0 && trashPiles[activePileIndex]) {
                 const pile = trashPiles[activePileIndex];
                 pile.active = false;
-                if (pile.mesh) {
-                    scene.remove(pile.mesh);
-                }
+                // Don't remove mesh here - it's fading out gracefully
             }
 
             // Remove object
@@ -2623,8 +2710,12 @@
             initSoundEffects();
             initRemixSDK();
             handleResize(); // Initial sizing
-            resetGame();
-            gameLoop();
+
+            // Load trash textures, then start game
+            loadTrashTextures(() => {
+                resetGame();
+                gameLoop();
+            });
         }
 
         init();
