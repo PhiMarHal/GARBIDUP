@@ -878,7 +878,7 @@
             }
 
             // Load boss avatar (pick 1 of 4 randomly for this game)
-            bossAvatarNumber = 1 + Math.floor(Math.random() * 4);
+            bossAvatarNumber = 1 + Math.floor(Math.random() * 8);
             const bossPath = getAssetPath(`assets/boss_pfp${bossAvatarNumber}.jpg`);
             bossAvatarImage = new Image();
             bossAvatarImage.onload = () => {
@@ -3290,6 +3290,10 @@
                 "Beauty. Keep going.",
                 "Ahh, this place feels cleaner already.",
                 "The best junk is junk out of my yard.",
+                "Out of sight, out of mind.",
+                "It's not littering if nobody sees you.",
+                `${itemName}... Maybe we should have kept that one.`,
+                `Stick with me, ${playerName}. We'll make a fortune.`,
                 `${playerName}, I knew I was right to hire you.`,
                 `Look at the fishes chomp on that ${itemName}!`,
                 `Keep going, ${playerName}, we'll be done in no time.`,
