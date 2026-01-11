@@ -462,6 +462,7 @@
         // ============================================
         let gameState = 'INTRO'; // Start with intro dialog
         let showDictionary = false;
+        let showQuitConfirm = false;
         let dictScrollY = 0; // Scroll position for dictionary
         let animTime = 0; // Animation timer
 
@@ -1665,6 +1666,10 @@
                 renderDictionaryPopup();
             }
 
+            if (showQuitConfirm) {
+                renderQuitConfirm();
+            }
+
             if (gameState === 'VICTORY') {
                 renderVictoryScreen();
             }
@@ -1726,82 +1731,57 @@
             // Proportional positioning
             const topY = Math.floor(CONFIG.HEIGHT * 0.053);
             const scoreFontSize = Math.max(20, Math.floor(CONFIG.WIDTH * 0.105));
-            const scoreX = Math.floor(CONFIG.WIDTH * 0.03);
 
-            // Score on left with wave animation on digits
-            const scoreStr = score.toString();
-            uiCtx.font = `bold ${scoreFontSize}px Arial`;
-            uiCtx.textAlign = 'left';
-            uiCtx.textBaseline = 'middle';
-
-            let xPos = scoreX;
-            for (let i = 0; i < scoreStr.length; i++) {
-                const digit = scoreStr[i];
-                const waveOffset = Math.sin(animTime * 0.5 + i * 1.2) * 3;
-
-                // Thicker shadow/outline effect
-                uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
-                uiCtx.fillText(digit, xPos + 3, topY + waveOffset + 3);
-                uiCtx.fillText(digit, xPos + 2, topY + waveOffset + 2);
-
-                // Gold text
-                uiCtx.fillStyle = '#FFD700';
-                uiCtx.fillText(digit, xPos, topY + waveOffset);
-
-                xPos += uiCtx.measureText(digit).width + 2;
-            }
-
-            // Dictionary button on right - proportional to screen width
-            const btnWidth = Math.floor(CONFIG.WIDTH * 0.325);
-            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
-            const btnX = CONFIG.WIDTH - btnWidth - Math.floor(CONFIG.WIDTH * 0.025);
+            // Button dimensions (same for both buttons)
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.3);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.06);
             const btnY = Math.floor(CONFIG.HEIGHT * 0.02);
             const cornerRadius = Math.floor(btnHeight * 0.2);
             const btnFontSize = Math.max(12, Math.floor(btnHeight * 0.45));
+            const btnMargin = Math.floor(CONFIG.WIDTH * 0.025);
 
-            if (showDictionary) {
-                // Glowing effect when dictionary is open
+            // QUIT JOB button on left
+            const quitBtnX = btnMargin;
+
+            if (showQuitConfirm) {
+                // Glowing effect when quit confirm is showing
                 const glowIntensity = 0.4 + Math.sin(animTime * 2) * 0.2;
                 uiCtx.shadowColor = `rgba(100, 200, 255, ${glowIntensity})`;
                 uiCtx.shadowBlur = 15;
 
-                // Shadow
                 uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
-                // Active state - brighter blue
                 uiCtx.fillStyle = '#4a90d9';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.strokeStyle = '#6ab0f9';
                 uiCtx.lineWidth = 2;
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.stroke();
 
-                // Reset shadow
                 uiCtx.shadowColor = 'transparent';
                 uiCtx.shadowBlur = 0;
             } else {
-                // Normal state
                 uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.fillStyle = '#555';
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.fill();
 
                 uiCtx.strokeStyle = '#888';
                 uiCtx.lineWidth = 2;
                 uiCtx.beginPath();
-                uiCtx.roundRect(btnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.roundRect(quitBtnX, btnY, btnWidth, btnHeight, cornerRadius);
                 uiCtx.stroke();
             }
 
@@ -1809,7 +1789,86 @@
             uiCtx.font = `bold ${btnFontSize}px Arial`;
             uiCtx.textAlign = 'center';
             uiCtx.textBaseline = 'middle';
-            uiCtx.fillText('DICTIONARY', btnX + btnWidth / 2, btnY + btnHeight / 2);
+            uiCtx.fillText('QUIT JOB', quitBtnX + btnWidth / 2, btnY + btnHeight / 2);
+
+            // Score in center with wave animation on digits
+            const scoreStr = score.toString();
+            uiCtx.font = `bold ${scoreFontSize}px Arial`;
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+
+            // Calculate total score width for centering
+            let totalScoreWidth = 0;
+            for (let i = 0; i < scoreStr.length; i++) {
+                totalScoreWidth += uiCtx.measureText(scoreStr[i]).width + 2;
+            }
+            totalScoreWidth -= 2;
+
+            let xPos = CONFIG.WIDTH / 2 - totalScoreWidth / 2;
+            uiCtx.textAlign = 'left';
+            for (let i = 0; i < scoreStr.length; i++) {
+                const digit = scoreStr[i];
+                const waveOffset = Math.sin(animTime * 0.5 + i * 1.2) * 3;
+
+                uiCtx.fillStyle = 'rgba(0,0,0,0.6)';
+                uiCtx.fillText(digit, xPos + 3, topY + waveOffset + 3);
+                uiCtx.fillText(digit, xPos + 2, topY + waveOffset + 2);
+
+                uiCtx.fillStyle = '#FFD700';
+                uiCtx.fillText(digit, xPos, topY + waveOffset);
+
+                xPos += uiCtx.measureText(digit).width + 2;
+            }
+
+            // Dictionary button on right
+            const dictBtnX = CONFIG.WIDTH - btnWidth - btnMargin;
+
+            if (showDictionary) {
+                const glowIntensity = 0.4 + Math.sin(animTime * 2) * 0.2;
+                uiCtx.shadowColor = `rgba(100, 200, 255, ${glowIntensity})`;
+                uiCtx.shadowBlur = 15;
+
+                uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
+                uiCtx.fill();
+
+                uiCtx.fillStyle = '#4a90d9';
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.fill();
+
+                uiCtx.strokeStyle = '#6ab0f9';
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.stroke();
+
+                uiCtx.shadowColor = 'transparent';
+                uiCtx.shadowBlur = 0;
+            } else {
+                uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX + 2, btnY + 2, btnWidth, btnHeight, cornerRadius);
+                uiCtx.fill();
+
+                uiCtx.fillStyle = '#555';
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.fill();
+
+                uiCtx.strokeStyle = '#888';
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                uiCtx.roundRect(dictBtnX, btnY, btnWidth, btnHeight, cornerRadius);
+                uiCtx.stroke();
+            }
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = `bold ${btnFontSize}px Arial`;
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('DICTIONARY', dictBtnX + btnWidth / 2, btnY + btnHeight / 2);
         }
 
         function renderLetterPool() {
@@ -2386,6 +2445,142 @@
             }
         }
 
+        function renderQuitConfirm() {
+            // Semi-transparent overlay
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            uiCtx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            // Dialog box at bottom (same style as intro dialog)
+            const boxHeight = Math.floor(CONFIG.HEIGHT * 0.132);
+            const boxMargin = Math.floor(CONFIG.WIDTH * 0.025);
+            const boxY = CONFIG.HEIGHT - boxHeight - boxMargin;
+            const boxX = boxMargin;
+            const boxWidth = CONFIG.WIDTH - boxMargin * 2;
+            const cornerRadius = Math.floor(boxHeight * 0.12);
+
+            // Box background
+            uiCtx.fillStyle = 'rgba(20, 30, 40, 0.95)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
+            uiCtx.fill();
+
+            // Box border
+            uiCtx.strokeStyle = 'rgba(100, 140, 180, 0.6)';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
+            uiCtx.stroke();
+
+            // Profile picture
+            const picSize = Math.floor(boxHeight * 0.65);
+            const picMargin = Math.floor(boxHeight * 0.12);
+            const picX = boxX + picMargin;
+            const picY = boxY + (boxHeight - picSize) / 2;
+            const picRadius = Math.floor(picSize * 0.12);
+
+            if (bossAvatarImage) {
+                uiCtx.save();
+                uiCtx.beginPath();
+                uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
+                uiCtx.clip();
+                uiCtx.drawImage(bossAvatarImage, picX, picY, picSize, picSize);
+                uiCtx.restore();
+            } else {
+                uiCtx.fillStyle = 'rgba(80, 100, 120, 0.8)';
+                uiCtx.beginPath();
+                uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
+                uiCtx.fill();
+            }
+
+            uiCtx.strokeStyle = 'rgba(120, 150, 180, 0.8)';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(picX, picY, picSize, picSize, picRadius);
+            uiCtx.stroke();
+
+            // "BOSS" title
+            const titleFontSize = Math.max(10, Math.floor(boxHeight * 0.16));
+            const textX = picX + picSize + picMargin;
+            uiCtx.font = `bold ${titleFontSize}px Arial`;
+            uiCtx.textAlign = 'left';
+            uiCtx.textBaseline = 'top';
+            uiCtx.fillStyle = '#FFD700';
+            const textStartY = boxY + picMargin;
+            uiCtx.fillText('BOSS', textX, textStartY);
+
+            // Dialog text
+            const dialogFontSize = Math.max(11, Math.floor(boxHeight * 0.17));
+            uiCtx.font = `${dialogFontSize}px Arial`;
+            uiCtx.fillStyle = '#FFF';
+            const titleGap = Math.max(9, Math.floor(boxHeight * 0.09));
+            const dialogY = textStartY + titleFontSize + titleGap;
+            const displayName = playerName || 'Worker';
+            uiCtx.fillText(`${displayName}! Do you really want to quit?`, textX, dialogY);
+            uiCtx.fillText(`There's more work to do...`, textX, dialogY + dialogFontSize * 1.3);
+
+            // QUIT and STAY buttons in center of screen
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.35);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.08);
+            const btnGap = Math.floor(CONFIG.WIDTH * 0.05);
+            const btnY = CONFIG.HEIGHT * 0.45;
+            const btnCornerRadius = Math.floor(btnHeight * 0.2);
+            const btnFontSize = Math.max(14, Math.floor(btnHeight * 0.4));
+
+            // QUIT button (left, red-ish)
+            const quitX = CONFIG.WIDTH / 2 - btnWidth - btnGap / 2;
+
+            uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(quitX + 2, btnY + 2, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.fill();
+
+            uiCtx.fillStyle = '#8B3A3A';
+            uiCtx.beginPath();
+            uiCtx.roundRect(quitX, btnY, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.fill();
+
+            uiCtx.strokeStyle = '#AA5555';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(quitX, btnY, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.stroke();
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = `bold ${btnFontSize}px Arial`;
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('QUIT', quitX + btnWidth / 2, btnY + btnHeight / 2);
+
+            // STAY button (right, green-ish)
+            const stayX = CONFIG.WIDTH / 2 + btnGap / 2;
+
+            uiCtx.fillStyle = 'rgba(0,0,0,0.4)';
+            uiCtx.beginPath();
+            uiCtx.roundRect(stayX + 2, btnY + 2, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.fill();
+
+            uiCtx.fillStyle = '#3A6B3A';
+            uiCtx.beginPath();
+            uiCtx.roundRect(stayX, btnY, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.fill();
+
+            uiCtx.strokeStyle = '#55AA55';
+            uiCtx.lineWidth = 2;
+            uiCtx.beginPath();
+            uiCtx.roundRect(stayX, btnY, btnWidth, btnHeight, btnCornerRadius);
+            uiCtx.stroke();
+
+            uiCtx.fillStyle = '#FFF';
+            uiCtx.font = `bold ${btnFontSize}px Arial`;
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'middle';
+            uiCtx.fillText('STAY', stayX + btnWidth / 2, btnY + btnHeight / 2);
+
+            // Store button positions for click handling
+            renderQuitConfirm.quitBtn = { x: quitX, y: btnY, width: btnWidth, height: btnHeight };
+            renderQuitConfirm.stayBtn = { x: stayX, y: btnY, width: btnWidth, height: btnHeight };
+        }
+
         function renderVictoryScreen() {
             // Skip rendering if in Remix (Remix handles its own game over UI)
             if (isInRemix()) return;
@@ -2501,14 +2696,52 @@
                 return;
             }
 
-            // Dictionary button - top right - proportional to screen
-            const dictBtnWidth = Math.floor(CONFIG.WIDTH * 0.325);
-            const dictBtnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
-            const dictBtnX = CONFIG.WIDTH - dictBtnWidth - Math.floor(CONFIG.WIDTH * 0.025);
-            const dictBtnY = Math.floor(CONFIG.HEIGHT * 0.02);
+            // Handle quit confirm dialog buttons
+            if (showQuitConfirm) {
+                const quitBtn = renderQuitConfirm.quitBtn;
+                const stayBtn = renderQuitConfirm.stayBtn;
 
-            if (pos.x >= dictBtnX && pos.x <= dictBtnX + dictBtnWidth &&
-                pos.y >= dictBtnY && pos.y <= dictBtnY + dictBtnHeight) {
+                if (quitBtn && pos.x >= quitBtn.x && pos.x <= quitBtn.x + quitBtn.width &&
+                    pos.y >= quitBtn.y && pos.y <= quitBtn.y + quitBtn.height) {
+                    // QUIT - end game and submit score
+                    showQuitConfirm = false;
+                    gameState = 'VICTORY';
+                    signalGameOver(score);
+                    return;
+                }
+
+                if (stayBtn && pos.x >= stayBtn.x && pos.x <= stayBtn.x + stayBtn.width &&
+                    pos.y >= stayBtn.y && pos.y <= stayBtn.y + stayBtn.height) {
+                    // STAY - close dialog and resume
+                    showQuitConfirm = false;
+                    return;
+                }
+
+                // Clicking anywhere else also closes the dialog
+                showQuitConfirm = false;
+                return;
+            }
+
+            // Button dimensions (same for both buttons)
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.325);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
+            const btnY = Math.floor(CONFIG.HEIGHT * 0.02);
+            const btnMargin = Math.floor(CONFIG.WIDTH * 0.025);
+
+            // QUIT JOB button - top left
+            const quitBtnX = btnMargin;
+            if (pos.x >= quitBtnX && pos.x <= quitBtnX + btnWidth &&
+                pos.y >= btnY && pos.y <= btnY + btnHeight) {
+                showQuitConfirm = true;
+                showDictionary = false; // Close dictionary if open
+                return;
+            }
+
+            // Dictionary button - top right
+            const dictBtnX = CONFIG.WIDTH - btnWidth - btnMargin;
+
+            if (pos.x >= dictBtnX && pos.x <= dictBtnX + btnWidth &&
+                pos.y >= btnY && pos.y <= btnY + btnHeight) {
                 showDictionary = !showDictionary; // Toggle dictionary
                 playOpenDictionary();
                 return;
@@ -3138,6 +3371,7 @@
             activePileIndex = -1;
             pendingPileIndex = -1;
             showDictionary = false;
+            showQuitConfirm = false;
             cameraMode = 'DUMPYARD';
             hasShownShootHint = false;
             lastWordValid = false;
