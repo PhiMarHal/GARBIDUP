@@ -878,7 +878,7 @@
             }
 
             // Load boss avatar (pick 1 of 4 randomly for this game)
-            bossAvatarNumber = 1 + Math.floor(Math.random() * 8);
+            bossAvatarNumber = 1 + Math.floor(Math.random() * 4);
             const bossPath = getAssetPath(`assets/boss_pfp${bossAvatarNumber}.jpg`);
             bossAvatarImage = new Image();
             bossAvatarImage.onload = () => {
@@ -1634,8 +1634,8 @@
         function renderUI() {
             uiCtx.clearRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
-            // Increment animation time
-            animTime += 0.05;
+            // Increment animation time - frame independent
+            animTime += 0.05 * deltaMultiplier;
 
             // Score at top of sky
             renderTopScore();
@@ -1732,9 +1732,9 @@
             const topY = Math.floor(CONFIG.HEIGHT * 0.053);
             const scoreFontSize = Math.max(20, Math.floor(CONFIG.WIDTH * 0.105));
 
-            // Button dimensions (same for both buttons)
-            const btnWidth = Math.floor(CONFIG.WIDTH * 0.3);
-            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.06);
+            // Button dimensions (same for both buttons) - 15% smaller
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.276);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.057);
             const btnY = Math.floor(CONFIG.HEIGHT * 0.02);
             const cornerRadius = Math.floor(btnHeight * 0.2);
             const btnFontSize = Math.max(12, Math.floor(btnHeight * 0.45));
@@ -2722,9 +2722,9 @@
                 return;
             }
 
-            // Button dimensions (same for both buttons)
-            const btnWidth = Math.floor(CONFIG.WIDTH * 0.325);
-            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.067);
+            // Button dimensions (same for both buttons) - 15% smaller
+            const btnWidth = Math.floor(CONFIG.WIDTH * 0.276);
+            const btnHeight = Math.floor(CONFIG.HEIGHT * 0.057);
             const btnY = Math.floor(CONFIG.HEIGHT * 0.02);
             const btnMargin = Math.floor(CONFIG.WIDTH * 0.025);
 
@@ -3010,6 +3010,8 @@
         // GAME LOGIC
         // ============================================
         let lastUpdateTime = 0;
+        let deltaMultiplier = 1; // Global so renderUI can access it
+        const REFERENCE_FRAME_TIME = 1000 / 144; // 144fps reference (~6.944ms)
 
         function update() {
             // Skip updates when tab is hidden
@@ -3018,8 +3020,9 @@
             }
 
             const now = performance.now();
-            const deltaTime = lastUpdateTime ? now - lastUpdateTime : 16;
+            const deltaTime = lastUpdateTime ? now - lastUpdateTime : REFERENCE_FRAME_TIME;
             lastUpdateTime = now;
+            deltaMultiplier = deltaTime / REFERENCE_FRAME_TIME; // 1.0 at 144fps, ~2.4 at 60fps
 
             // Update trash pile fade animations
             updatePileFades();
@@ -3083,7 +3086,8 @@
                 }
             }
 
-            // Letter animations (position and size)
+            // Letter animations (position and size) - frame independent
+            const animSpeed = 1 - Math.pow(1 - CONFIG.ANIM_SPEED, deltaMultiplier);
             for (let i = 0; i < letters.length; i++) {
                 const letter = letters[i];
                 if (!letter.revealed) continue;
@@ -3092,19 +3096,20 @@
                 let targetY = letter.selected ? letter.wordY : letter.poolY;
                 let targetSize = letter.selected ? CONFIG.WORD_LETTER_SIZE : CONFIG.LETTER_SIZE;
 
-                letter.currentX += (targetX - letter.currentX) * CONFIG.ANIM_SPEED;
-                letter.currentY += (targetY - letter.currentY) * CONFIG.ANIM_SPEED;
+                letter.currentX += (targetX - letter.currentX) * animSpeed;
+                letter.currentY += (targetY - letter.currentY) * animSpeed;
                 letter.currentSize = letter.currentSize || 5;
-                letter.currentSize += (targetSize - letter.currentSize) * CONFIG.ANIM_SPEED;
+                letter.currentSize += (targetSize - letter.currentSize) * animSpeed;
             }
 
-            // Message timer
+            // Message timer - frame independent
             if (messageTimer > 0) {
-                messageTimer -= 16;
+                messageTimer -= deltaTime;
             }
 
-            // Camera interpolation - faster during flight, smooth lookAt
-            const cameraLerpSpeed = (gameState === 'FLYING') ? 0.12 : 0.06;
+            // Camera interpolation - frame independent
+            const baseCameraLerpSpeed = (gameState === 'FLYING') ? 0.12 : 0.06;
+            const cameraLerpSpeed = 1 - Math.pow(1 - baseCameraLerpSpeed, deltaMultiplier);
             camera.position.lerp(targetCameraPos, cameraLerpSpeed);
 
             // Smooth lookAt by interpolating a look target point
@@ -3114,20 +3119,21 @@
             camera.userData.currentLookAt.lerp(targetCameraLook, cameraLerpSpeed);
             camera.lookAt(camera.userData.currentLookAt);
 
-            // Object physics
+            // Object physics - frame independent
             if (gameState === 'FLYING' && currentObject) {
-                // Gravity
-                currentObject.vy -= CONFIG.GRAVITY;
+                // Gravity - frame independent
+                currentObject.vy -= CONFIG.GRAVITY * deltaMultiplier;
 
-                // Air resistance
-                currentObject.vx *= CONFIG.AIR_RESISTANCE;
-                currentObject.vz *= CONFIG.AIR_RESISTANCE;
+                // Air resistance - frame independent (use pow for correct behavior)
+                const airResistance = Math.pow(CONFIG.AIR_RESISTANCE, deltaMultiplier);
+                currentObject.vx *= airResistance;
+                currentObject.vz *= airResistance;
 
-                // Update position
-                currentObject.x += currentObject.vx;
-                currentObject.y += currentObject.vy;
-                currentObject.z += currentObject.vz;
-                currentObject.rotation += currentObject.rotationSpeed;
+                // Update position - frame independent
+                currentObject.x += currentObject.vx * deltaMultiplier;
+                currentObject.y += currentObject.vy * deltaMultiplier;
+                currentObject.z += currentObject.vz * deltaMultiplier;
+                currentObject.rotation += currentObject.rotationSpeed * deltaMultiplier;
 
                 // Clamp position to stay within playable bounds
                 const lakeStart = CONFIG.LAKE_Z - CONFIG.LAKE_WIDTH / 2;
@@ -3290,10 +3296,6 @@
                 "Beauty. Keep going.",
                 "Ahh, this place feels cleaner already.",
                 "The best junk is junk out of my yard.",
-                "Out of sight, out of mind.",
-                "It's not littering if nobody sees you.",
-                `${itemName}... Maybe we should have kept that one.`,
-                `Stick with me, ${playerName}. We'll make a fortune.`,
                 `${playerName}, I knew I was right to hire you.`,
                 `Look at the fishes chomp on that ${itemName}!`,
                 `Keep going, ${playerName}, we'll be done in no time.`,
